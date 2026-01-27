@@ -9,6 +9,9 @@ struct ContentView: View {
         case notesDay, notesWeek, notesMonth
     }
     
+    @State private var contentOpacity: Double = 1.0
+    @State private var contentScale: CGFloat = 1.0
+    
     var body: some View {
         let appBackground = Color(nsColor: .windowBackgroundColor)
         let sidebarBackground = Color(nsColor: .controlBackgroundColor)
@@ -49,21 +52,37 @@ struct ContentView: View {
                 .background(sidebarBackground)
                 .navigationTitle("Walpts")
             } detail: {
-                switch viewModel.activeTab {
-                case .day:
-                    DayView()
-                case .week:
-                    WeekView()
-                case .month:
-                    MonthView()
-                case .inbox:
-                    InboxView()
-                case .notesDay:
-                    NotesDayView()
-                case .notesWeek:
-                    NotesWeekView()
-                case .notesMonth:
-                    NotesMonthView()
+                Group {
+                    switch viewModel.activeTab {
+                    case .day:
+                        DayView()
+                    case .week:
+                        WeekView()
+                    case .month:
+                        MonthView()
+                    case .inbox:
+                        InboxView()
+                    case .notesDay:
+                        NotesDayView()
+                    case .notesWeek:
+                        NotesWeekView()
+                    case .notesMonth:
+                        NotesMonthView()
+                    }
+                }
+                .opacity(contentOpacity)
+                .scaleEffect(contentScale)
+                .onChange(of: viewModel.activeTab) { _, _ in
+                    withAnimation(.easeOut(duration: 0.1)) {
+                        contentOpacity = 0
+                        contentScale = 0.95
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            contentOpacity = 1.0
+                            contentScale = 1.0
+                        }
+                    }
                 }
             }
         }

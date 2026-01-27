@@ -8,6 +8,8 @@ struct CreateTaskView: View {
     
     @State private var title = ""
     @State private var priority: Priority = .medium
+    @State private var scale: CGFloat = 0.8
+    @State private var opacity: Double = 0.0
     
     var body: some View {
         VStack(spacing: 20) {
@@ -26,7 +28,13 @@ struct CreateTaskView: View {
             
             HStack {
                 Button("Cancel") {
-                    isPresented = false
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        scale = 0.8
+                        opacity = 0
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        isPresented = false
+                    }
                 }
                 .keyboardShortcut(.cancelAction)
                 
@@ -38,7 +46,13 @@ struct CreateTaskView: View {
                     } else if let date = date {
                         viewModel.addTask(title: title, type: .discussion, date: date, priority: priority)
                     }
-                    isPresented = false
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        scale = 0.8
+                        opacity = 0
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        isPresented = false
+                    }
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
@@ -50,5 +64,13 @@ struct CreateTaskView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 6)
+        .scaleEffect(scale)
+        .opacity(opacity)
+        .onAppear {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                scale = 1.0
+                opacity = 1.0
+            }
+        }
     }
 }

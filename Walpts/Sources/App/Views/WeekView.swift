@@ -3,6 +3,9 @@ import SwiftUI
 struct WeekView: View {
     @EnvironmentObject var viewModel: TaskViewModel
     
+    @State private var contentOpacity: Double = 1.0
+    @State private var contentOffset: CGFloat = 0
+    
     private var currentWeekStart: Date {
         let calendar = Calendar.current
         let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: viewModel.selectedDate)
@@ -12,7 +15,7 @@ struct WeekView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Button(action: { changeWeek(by: -1) }) {
+                Button(action: { animateTransition(direction: 1) }) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14))
                         .foregroundColor(.primary)
@@ -20,16 +23,18 @@ struct WeekView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .buttonStyle(ScaleButtonStyle())
                 
                 Spacer()
                 
                 Text(weekIntervalString)
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.primary)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedDate)
                 
                 Spacer()
                 
-                Button(action: { changeWeek(by: 1) }) {
+                Button(action: { animateTransition(direction: -1) }) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 14))
                         .foregroundColor(.primary)
@@ -37,6 +42,7 @@ struct WeekView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .buttonStyle(ScaleButtonStyle())
             }
             .padding(.horizontal)
             .padding(.vertical, 12)
@@ -47,28 +53,49 @@ struct WeekView: View {
                     if let date = Calendar.current.date(byAdding: .day, value: dayOffset, to: currentWeekStart) {
                         WeekDayCell(date: date, viewModel: viewModel)
                             .onTapGesture {
-                                viewModel.selectedDate = date
-                                viewModel.activeTab = .day
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                                    viewModel.selectedDate = date
+                                    viewModel.activeTab = .day
+                                }
                             }
                     }
                 }
             }
             .background(Color.clear)
             .padding(.top, 1)
+            .opacity(contentOpacity)
+            .offset(x: contentOffset)
             
             Spacer()
         }
         .background(Color.clear)
         .onSwipe(left: {
-            withAnimation { changeWeek(by: 1) }
+            animateTransition(direction: 1)
         }, right: {
-            withAnimation { changeWeek(by: -1) }
+            animateTransition(direction: -1)
         })
     }
     
     private func changeWeek(by weeks: Int) {
         if let newDate = Calendar.current.date(byAdding: .weekOfYear, value: weeks, to: viewModel.selectedDate) {
             viewModel.selectedDate = newDate
+        }
+    }
+    
+    private func animateTransition(direction: Int) {
+        withAnimation(.easeOut(duration: 0.15)) {
+            contentOpacity = 0
+            contentOffset = CGFloat(direction * -50)
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            changeWeek(by: direction)
+            contentOffset = CGFloat(direction * 50)
+            
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                contentOpacity = 1
+                contentOffset = 0
+            }
         }
     }
     

@@ -5,6 +5,9 @@ struct TaskRow: View {
     var onNextStatus: (() -> Void)?
     var onTap: () -> Void
     
+    @State private var isAppearing = false
+    @State private var isPressed = false
+    
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             Rectangle()
@@ -58,10 +61,26 @@ struct TaskRow: View {
         .padding(.horizontal, 14)
         .background(Color(nsColor: .textBackgroundColor))
         .cornerRadius(10)
-        .shadow(color: Color.black.opacity(0.06), radius: 6, x: 0, y: 3)
+        .shadow(color: Color.black.opacity(isPressed ? 0.12 : 0.06), radius: isPressed ? 3 : 6, x: 0, y: isPressed ? 1 : 3)
+        .scaleEffect(isPressed ? 0.98 : 1.0)
+        .opacity(isAppearing ? 1.0 : 0.0)
+        .offset(y: isAppearing ? 0 : 20)
         .contentShape(Rectangle())
         .onTapGesture {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                isPressed = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                    isPressed = false
+                }
+            }
             onTap()
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(Double.random(in: 0...0.1))) {
+                isAppearing = true
+            }
         }
     }
     

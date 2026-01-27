@@ -7,6 +7,8 @@ struct TaskDetailView: View {
     
     @State private var newSubtaskTitle = ""
     @State private var isEditingTitle = false
+    @State private var scale: CGFloat = 0.8
+    @State private var opacity: Double = 0.0
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -39,13 +41,25 @@ struct TaskDetailView: View {
                 
                 Spacer()
                 Button("Delete") {
-                    viewModel.deleteTask(task)
-                    dismiss()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        scale = 0.8
+                        opacity = 0
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        viewModel.deleteTask(task)
+                        dismiss()
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
                 Button("Close") {
-                    dismiss()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        scale = 0.8
+                        opacity = 0
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        dismiss()
+                    }
                 }
             }
             
@@ -54,26 +68,39 @@ struct TaskDetailView: View {
                     Text("Status:")
                     Menu {
                         Button("Discussion") {
-                            viewModel.updateStatus(for: task, to: .discussion)
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                                viewModel.updateStatus(for: task, to: .discussion)
+                            }
                         }
                         Button("To do") {
-                            viewModel.updateStatus(for: task, to: .pending)
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                                viewModel.updateStatus(for: task, to: .pending)
+                            }
                         }
                         Button("Approved") {
-                            viewModel.updateStatus(for: task, to: .approved)
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                                viewModel.updateStatus(for: task, to: .approved)
+                            }
                         }
                         Button("In progress") {
-                            viewModel.updateStatus(for: task, to: .inProgress)
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                                viewModel.updateStatus(for: task, to: .inProgress)
+                            }
                         }
                         Button("Done") {
-                            viewModel.updateStatus(for: task, to: .completed)
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                                viewModel.updateStatus(for: task, to: .completed)
+                            }
                         }
                         Button("Reported") {
-                            viewModel.updateStatus(for: task, to: .reported)
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                                viewModel.updateStatus(for: task, to: .reported)
+                            }
                         }
                     } label: {
                         Text(statusTitle(task.status))
                     }
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: task.status)
                 }
                 
                 Spacer()
@@ -146,6 +173,14 @@ struct TaskDetailView: View {
         }
         .padding()
         .frame(width: 500, height: 520)
+        .scaleEffect(scale)
+        .opacity(opacity)
+        .onAppear {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                scale = 1.0
+                opacity = 1.0
+            }
+        }
     }
     
     private func addSubtask() {

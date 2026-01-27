@@ -6,11 +6,13 @@ struct DayView: View {
     @State private var selectedTask: TaskItem?
     
     @State private var dragOffset: CGFloat = 0
+    @State private var contentOpacity: Double = 1.0
+    @State private var contentOffset: CGFloat = 0
     
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Button(action: { changeDate(by: -1) }) {
+                Button(action: { animateTransition(direction: -1) }) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14))
                         .foregroundColor(.primary)
@@ -18,16 +20,18 @@ struct DayView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .buttonStyle(ScaleButtonStyle())
                 
                 Spacer()
                 
                 Text(formattedDate(viewModel.selectedDate))
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.primary)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedDate)
                 
                 Spacer()
                 
-                Button(action: { changeDate(by: 1) }) {
+                Button(action: { animateTransition(direction: 1) }) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 14))
                         .foregroundColor(.primary)
@@ -35,16 +39,22 @@ struct DayView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .buttonStyle(ScaleButtonStyle())
                 
                 Spacer()
                     .frame(width: 16)
                 
-                Button(action: { viewModel.selectedDate = Date() }) {
+                Button(action: {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                        viewModel.selectedDate = Date()
+                    }
+                }) {
                     Image(systemName: "calendar")
                         .font(.system(size: 14))
                         .foregroundColor(.primary)
                 }
                 .buttonStyle(.plain)
+                .buttonStyle(ScaleButtonStyle())
                 .help("Go to Today")
             }
             .padding(.horizontal)
@@ -64,6 +74,7 @@ struct DayView: View {
                                 .foregroundColor(.secondary)
                         }
                         .padding(.top, 40)
+                        .transition(.opacity.combined(with: .scale))
                     } else {
                         if !dayTasks.isEmpty {
                             ForEach(dayTasks) { task in
@@ -110,23 +121,25 @@ struct DayView: View {
                 }
                 .padding(.vertical)
                 .padding(.horizontal, 16)
+                .opacity(contentOpacity)
+                .offset(x: contentOffset)
             }
             .background(Color.clear)
             .gesture(
                 DragGesture()
                     .onEnded { value in
                         if value.translation.width < -50 {
-                            withAnimation { changeDate(by: 1) } // Swipe Left -> Next Day
+                            animateTransition(direction: 1)
                         } else if value.translation.width > 50 {
-                            withAnimation { changeDate(by: -1) } // Swipe Right -> Prev Day
+                            animateTransition(direction: -1)
                         }
                     }
             )
         }
         .onSwipe(left: {
-            withAnimation { changeDate(by: 1) }
+            animateTransition(direction: 1)
         }, right: {
-            withAnimation { changeDate(by: -1) }
+            animateTransition(direction: -1)
         })
         .background(Color(nsColor: .textBackgroundColor))
         .cornerRadius(12)
@@ -134,7 +147,11 @@ struct DayView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .overlay(alignment: .bottomTrailing) {
-            Button(action: { showingCreateTask = true }) {
+            Button(action: { 
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                    showingCreateTask = true
+                }
+            }) {
                 Image(systemName: "plus")
                     .font(.system(size: 20, weight: .medium))
                     .foregroundColor(.primary)
@@ -144,6 +161,7 @@ struct DayView: View {
                 .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 6)
             }
             .buttonStyle(.plain)
+            .buttonStyle(PulseButtonStyle())
             .padding(24)
         }
         .sheet(isPresented: $showingCreateTask) {
@@ -165,11 +183,45 @@ struct DayView: View {
         }
     }
     
+    private func animateTransition(direction: Int) {
+        withAnimation(.easeOut(duration: 0.15)) {
+            contentOpacity = 0
+            contentOffset = CGFloat(direction * -50)
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            changeDate(by: direction)
+            contentOffset = CGFloat(direction * 50)
+            
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                contentOpacity = 1
+                contentOffset = 0
+            }
+        }
+    }
+    
     private func formattedDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US")
         formatter.dateFormat = "d MMMM"
         return formatter.string(from: date)
+    }
+}
+
+struct ScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.90 : 1.0)
+            .opacity(configuration.isPressed ? 0.7 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
+    }
+}
+
+struct PulseButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.85 : 1.0)
+            .animation(.spring(response: 0.4, dampingFraction: 0.5), value: configuration.isPressed)
     }
 }
 
