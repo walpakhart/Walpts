@@ -184,7 +184,7 @@ struct MonthDayCell: View {
     
     private func colorForTask(_ task: TaskItem) -> Color {
         if task.status == .reported {
-            return Color(red: 0.85, green: 0.65, blue: 0.13)
+            return .purple
         }
         switch task.priority {
         case .high: return .red

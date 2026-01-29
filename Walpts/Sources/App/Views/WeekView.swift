@@ -138,7 +138,8 @@ struct WeekDayCell: View {
                         Text(task.title)
                             .font(.system(size: 10))
                             .lineLimit(1)
-                                .foregroundColor(.primary.opacity(0.7))
+                            .strikethrough(task.status == .reported)
+                            .foregroundColor(.primary.opacity(0.7))
                     }
                     .padding(.horizontal, 4)
                     .padding(.vertical, 2)
@@ -182,7 +183,7 @@ struct WeekDayCell: View {
     
     private func colorForTask(_ task: TaskItem) -> Color {
         if task.status == .reported {
-            return Color(red: 0.85, green: 0.65, blue: 0.13)
+            return .purple
         }
         switch task.priority {
         case .high: return .red
