@@ -503,82 +503,154 @@ struct NotesDayView: View {
 
 struct NotesWeekView: View {
     @EnvironmentObject var viewModel: TaskViewModel
-    
-    private var currentWeekStart: Date {
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: viewModel.selectedDate)
-        return calendar.date(from: components) ?? viewModel.selectedDate
-    }
+    @State private var anchorDate = Date()
     
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Button(action: { changeWeek(by: -1) }) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 14))
-                        .foregroundColor(.primary)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                
-                Spacer()
-                
-                Text(weekIntervalString)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.primary)
-                
-                Spacer()
-                
-                Button(action: { changeWeek(by: 1) }) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 14))
-                        .foregroundColor(.primary)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 12)
-            .background(Color(nsColor: .controlBackgroundColor))
-            
+            // Weekday Headers
             HStack(spacing: 1) {
-                ForEach(0..<7) { dayOffset in
-                    if let date = Calendar.current.date(byAdding: .day, value: dayOffset, to: currentWeekStart) {
-                        NotesWeekDayCell(date: date, viewModel: viewModel)
-                            .onTapGesture {
-                                viewModel.selectedDate = date
-                                viewModel.activeTab = .notesDay
-                            }
+                ForEach(0..<7) { index in
+                    Text(calendarDays[index])
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .foregroundColor(.primary.opacity(0.5))
+                }
+            }
+            .background(.regularMaterial)
+            
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                        ForEach(-24...24, id: \.self) { offset in
+                            NotesWeekMonthSection(monthOffset: offset, anchorDate: anchorDate, viewModel: viewModel)
+                                .id(offset)
+                        }
                     }
                 }
+                .onAppear {
+                    scrollToSelectedDate(proxy: proxy)
+                }
+                .onChange(of: viewModel.selectedDate) { _ in
+                    // Optional: scroll on external change
+                }
             }
-            .background(Color.clear)
-            .padding(.top, 1)
-            
-            Spacer()
         }
         .background(Color.clear)
-        .onSwipe(left: {
-            withAnimation { changeWeek(by: 1) }
-        }, right: {
-            withAnimation { changeWeek(by: -1) }
-        })
     }
     
-    private func changeWeek(by weeks: Int) {
-        if let newDate = Calendar.current.date(byAdding: .weekOfYear, value: weeks, to: viewModel.selectedDate) {
-            viewModel.selectedDate = newDate
+    private func scrollToSelectedDate(proxy: ScrollViewProxy) {
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: viewModel.selectedDate)
+        guard let weekStart = calendar.date(from: components) else { return }
+        
+        let anchorComponents = calendar.dateComponents([.year, .month], from: anchorDate)
+        guard let anchorMonthStart = calendar.date(from: anchorComponents) else { return }
+        
+        let targetComponents = calendar.dateComponents([.year, .month], from: weekStart)
+        guard let targetMonthStart = calendar.date(from: targetComponents) else { return }
+        
+        let diffComponents = calendar.dateComponents([.month], from: anchorMonthStart, to: targetMonthStart)
+        
+        if let monthDiff = diffComponents.month {
+            proxy.scrollTo(monthDiff, anchor: .top)
         }
     }
     
-    private var weekIntervalString: String {
-        let endOfWeek = Calendar.current.date(byAdding: .day, value: 6, to: currentWeekStart) ?? currentWeekStart
+    private var calendarDays: [String] {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US")
-        formatter.dateFormat = "d MMM"
-        return "\(formatter.string(from: currentWeekStart)) - \(formatter.string(from: endOfWeek))"
+        return formatter.shortStandaloneWeekdaySymbols
+    }
+}
+
+struct NotesWeekMonthSection: View {
+    let monthOffset: Int
+    let anchorDate: Date
+    @ObservedObject var viewModel: TaskViewModel
+    
+    private var currentMonth: Date {
+        Calendar.current.date(byAdding: .month, value: monthOffset, to: anchorDate) ?? anchorDate
+    }
+    
+    var body: some View {
+        let weeks = weeksInMonth()
+        
+        if !weeks.isEmpty {
+            Section(header: NotesWeekMonthHeader(title: monthString)) {
+                VStack(spacing: 1) {
+                    ForEach(weeks, id: \.self) { weekStart in
+                        NotesWeekRow(weekStart: weekStart, viewModel: viewModel)
+                    }
+                }
+                .padding(.bottom, 24)
+            }
+        }
+    }
+    
+    private var monthString: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US")
+        formatter.dateFormat = "LLLL yyyy"
+        return formatter.string(from: currentMonth).capitalized
+    }
+    
+    private func weeksInMonth() -> [Date] {
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.year, .month], from: currentMonth)
+        guard let startOfMonth = calendar.date(from: components) else { return [] }
+        
+        var weeks: [Date] = []
+        
+        let weekComponents = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: startOfMonth)
+        var weekStart = calendar.date(from: weekComponents)!
+        
+        if weekStart < startOfMonth {
+            weekStart = calendar.date(byAdding: .weekOfYear, value: 1, to: weekStart)!
+        }
+        
+        while calendar.isDate(weekStart, equalTo: startOfMonth, toGranularity: .month) {
+            weeks.append(weekStart)
+            weekStart = calendar.date(byAdding: .weekOfYear, value: 1, to: weekStart)!
+        }
+        
+        return weeks
+    }
+}
+
+struct NotesWeekMonthHeader: View {
+    let title: String
+    
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.primary)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+            Spacer()
+        }
+        .background(.ultraThinMaterial)
+    }
+}
+
+struct NotesWeekRow: View {
+    let weekStart: Date
+    @ObservedObject var viewModel: TaskViewModel
+    
+    var body: some View {
+        HStack(spacing: 1) {
+            ForEach(0..<7) { dayOffset in
+                if let date = Calendar.current.date(byAdding: .day, value: dayOffset, to: weekStart) {
+                    NotesWeekDayCell(date: date, viewModel: viewModel)
+                        .onTapGesture {
+                            viewModel.selectedDate = date
+                            viewModel.activeTab = .notesDay
+                        }
+                }
+            }
+        }
+        .background(Color.clear)
     }
 }
 
@@ -639,150 +711,7 @@ struct NotesWeekDayCell: View {
     }()
 }
 
-struct NotesMonthView: View {
-    @EnvironmentObject var viewModel: TaskViewModel
-    
-    private var currentMonth: Date {
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.year, .month], from: viewModel.selectedDate)
-        return calendar.date(from: components) ?? viewModel.selectedDate
-    }
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Button(action: { changeMonth(by: -1) }) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 14))
-                        .foregroundColor(.primary)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                
-                Spacer()
-                
-                Text(monthString)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.primary)
-                
-                Spacer()
-                
-                Button(action: { changeMonth(by: 1) }) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 14))
-                        .foregroundColor(.primary)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 12)
-            .background(Color(nsColor: .controlBackgroundColor))
-            
-            HStack(spacing: 1) {
-                let calendarDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-                ForEach(0..<calendarDays.count, id: \.self) { index in
-                    Text(calendarDays[index])
-                        .font(.system(size: 11, weight: .semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .background(.clear)
-            
-            let days = daysInMonth()
-            let columns = Array(repeating: GridItem(.flexible(), spacing: 1), count: 7)
-            
-            LazyVGrid(columns: columns, spacing: 1) {
-                ForEach(0..<firstWeekdayOffset(), id: \.self) { _ in
-                    Color.clear
-                        .aspectRatio(1, contentMode: .fill)
-                }
-                
-                ForEach(days, id: \.self) { date in
-                    NotesMonthDayCell(date: date, viewModel: viewModel)
-                        .aspectRatio(1, contentMode: .fill)
-                        .onTapGesture {
-                            viewModel.selectedDate = date
-                            viewModel.activeTab = .notesDay
-                        }
-                }
-            }
-            .background(Color.clear)
-            .padding(.top, 1)
-            
-            Spacer()
-        }
-        .background(Color.clear)
-        .onSwipe(left: {
-            withAnimation { changeMonth(by: 1) }
-        }, right: {
-            withAnimation { changeMonth(by: -1) }
-        })
-    }
-    
-    private func changeMonth(by months: Int) {
-        if let newDate = Calendar.current.date(byAdding: .month, value: months, to: viewModel.selectedDate) {
-            viewModel.selectedDate = newDate
-        }
-    }
-    
-    private var monthString: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US")
-        formatter.dateFormat = "LLLL yyyy"
-        return formatter.string(from: currentMonth)
-    }
-    
-    private func daysInMonth() -> [Date] {
-        let range = Calendar.current.range(of: .day, in: .month, for: currentMonth)!
-        return range.compactMap { day -> Date? in
-            Calendar.current.date(byAdding: .day, value: day - 1, to: currentMonth)
-        }
-    }
-    
-    private func firstWeekdayOffset() -> Int {
-        let components = Calendar.current.dateComponents([.year, .month], from: currentMonth)
-        let firstDayOfMonth = Calendar.current.date(from: components)!
-        let weekday = Calendar.current.component(.weekday, from: firstDayOfMonth)
-        return (weekday + 5) % 7
-    }
-}
 
-struct NotesMonthDayCell: View {
-    let date: Date
-    @ObservedObject var viewModel: TaskViewModel
-    
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            Color(nsColor: .textBackgroundColor)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(dayNumberFormatter.string(from: date))
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.primary.opacity(0.8))
-                
-                let text = viewModel.noteText(for: date)
-                if !text.isEmpty {
-                    Text(text)
-                        .font(.system(size: 9))
-                        .foregroundColor(.primary.opacity(0.7))
-                        .lineLimit(3)
-                }
-            }
-            .padding(6)
-        }
-    }
-    
-    private let dayNumberFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "d"
-        return formatter
-    }()
-}
 
 struct NotesRichTextEditor: NSViewRepresentable {
     @Binding var text: String
@@ -851,7 +780,6 @@ struct NotesRichTextEditor: NSViewRepresentable {
             
             // Update existing text
             if let storage = textView.textStorage {
-                 let fullRange = NSRange(location: 0, length: storage.length)
                  let styled = applyCustomAttributes(to: storage)
                  if storage.string != styled.string {
                       // Text content didn't change, just attributes

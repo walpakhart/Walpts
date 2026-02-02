@@ -5,8 +5,8 @@ struct ContentView: View {
     @AppStorage("isDarkMode") private var isDarkMode = false
     
     enum ViewType {
-        case day, week, month, inbox
-        case notesDay, notesWeek, notesMonth
+        case day, week, inbox
+        case notesDay, notesWeek
     }
     
     @State private var contentOpacity: Double = 1.0
@@ -26,8 +26,6 @@ struct ContentView: View {
                             .tag(ViewType.day)
                         Label("Week", systemImage: "calendar.badge.clock")
                             .tag(ViewType.week)
-                        Label("Month", systemImage: "calendar")
-                            .tag(ViewType.month)
                         Label("Inbox", systemImage: "tray")
                             .tag(ViewType.inbox)
                     }
@@ -37,8 +35,6 @@ struct ContentView: View {
                             .tag(ViewType.notesDay)
                         Label("Week", systemImage: "calendar.badge.clock")
                             .tag(ViewType.notesWeek)
-                        Label("Month", systemImage: "calendar")
-                            .tag(ViewType.notesMonth)
                     }
 
                     Section("Settings") {
@@ -58,16 +54,12 @@ struct ContentView: View {
                         DayView()
                     case .week:
                         WeekView()
-                    case .month:
-                        MonthView()
                     case .inbox:
                         InboxView()
                     case .notesDay:
                         NotesDayView()
                     case .notesWeek:
                         NotesWeekView()
-                    case .notesMonth:
-                        NotesMonthView()
                     }
                 }
                 .opacity(contentOpacity)
