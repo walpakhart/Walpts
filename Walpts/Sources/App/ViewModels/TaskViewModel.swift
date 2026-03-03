@@ -34,13 +34,15 @@ class TaskViewModel: ObservableObject {
     }
     
     func addTask(title: String, type: TaskType, date: Date, priority: Priority = .medium) {
-        let newTask = TaskItem(title: title, type: type, status: .pending, priority: priority, date: Calendar.current.startOfDay(for: date), isInbox: false)
+        let status: TaskStatus = type == .discussion ? .discussion : .pending
+        let newTask = TaskItem(title: title, type: type, status: status, priority: priority, date: Calendar.current.startOfDay(for: date), isInbox: false)
         tasks.append(newTask)
     }
     
     func addInboxTask(title: String, type: TaskType, priority: Priority = .medium) {
         let today = Calendar.current.startOfDay(for: Date())
-        let newTask = TaskItem(title: title, type: type, status: .pending, priority: priority, date: today, isInbox: true)
+        let status: TaskStatus = type == .discussion ? .discussion : .pending
+        let newTask = TaskItem(title: title, type: type, status: status, priority: priority, date: today, isInbox: true)
         tasks.append(newTask)
     }
     
@@ -185,6 +187,42 @@ class TaskViewModel: ObservableObject {
     
     func inboxTasks() -> [TaskItem] {
         tasks.filter { $0.isInbox }
+    }
+    
+    /// Выполненные задачи (completed или reported) за указанный день
+    func completedTasks(for date: Date) -> [TaskItem] {
+        let calendar = Calendar.current
+        return tasks.filter {
+            ($0.status == .completed || $0.status == .reported) &&
+            calendar.isDate($0.date, inSameDayAs: date)
+        }.sorted { t1, t2 in
+            let p1 = priorityValue(t1.priority)
+            let p2 = priorityValue(t2.priority)
+            if p1 == p2 { return (t1.endTime ?? t1.date) > (t2.endTime ?? t2.date) }
+            return p1 > p2
+        }
+    }
+    
+    /// Выполненные задачи за неделю: все 7 дней (день -> задачи, пустые дни тоже в списке)
+    func completedTasksByDay(weekStart: Date) -> [(day: Date, tasks: [TaskItem])] {
+        let calendar = Calendar.current
+        return (0..<7).compactMap { dayOffset -> (day: Date, tasks: [TaskItem])? in
+            guard let day = calendar.date(byAdding: .day, value: dayOffset, to: weekStart) else { return nil }
+            return (day: day, tasks: completedTasks(for: day))
+        }
+    }
+    
+    /// Выполненные задачи за месяц: все дни месяца (день -> задачи, пустые дни тоже в списке)
+    func completedTasksByDay(monthStart: Date) -> [(day: Date, tasks: [TaskItem])] {
+        let calendar = Calendar.current
+        guard let range = calendar.range(of: .day, in: .month, for: monthStart),
+              let firstDay = calendar.date(from: calendar.dateComponents([.year, .month], from: monthStart)) else {
+            return []
+        }
+        return (0..<range.count).compactMap { dayOffset -> (day: Date, tasks: [TaskItem])? in
+            guard let day = calendar.date(byAdding: .day, value: dayOffset, to: firstDay) else { return nil }
+            return (day: day, tasks: completedTasks(for: day))
+        }
     }
     
     func noteText(for date: Date) -> String {

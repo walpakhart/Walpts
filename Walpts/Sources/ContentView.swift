@@ -6,6 +6,7 @@ struct ContentView: View {
     
     enum ViewType {
         case day, week, inbox
+        case completed
         case notesDay, notesWeek
     }
     
@@ -22,19 +23,27 @@ struct ContentView: View {
             NavigationSplitView {
                 List(selection: $viewModel.activeTab) {
                     Section("Tasks") {
-                        Label("Day", systemImage: "calendar.day")
+                        Label("Day", systemImage: "sun.max.fill")
                             .tag(ViewType.day)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         Label("Week", systemImage: "calendar.badge.clock")
                             .tag(ViewType.week)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         Label("Inbox", systemImage: "tray")
                             .tag(ViewType.inbox)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Label("Completed", systemImage: "checkmark.circle")
+                            .tag(ViewType.completed)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     
                     Section("Notes") {
                         Label("Day", systemImage: "note.text")
                             .tag(ViewType.notesDay)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         Label("Week", systemImage: "calendar.badge.clock")
                             .tag(ViewType.notesWeek)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
                     Section("Settings") {
@@ -56,6 +65,8 @@ struct ContentView: View {
                         WeekView()
                     case .inbox:
                         InboxView()
+                    case .completed:
+                        CompletedView()
                     case .notesDay:
                         NotesDayView()
                     case .notesWeek:

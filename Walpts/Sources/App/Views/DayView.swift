@@ -313,6 +313,8 @@ struct NotesDayView: View {
     @EnvironmentObject var viewModel: TaskViewModel
     @State private var noteText: String = ""
     @State private var editorActionWrapper: ActionWrapper?
+    @State private var contentOpacity: Double = 0.0
+    @State private var contentOffsetX: CGFloat = 0
     
     @AppStorage("editorFontName") private var fontName: String = "System"
     @AppStorage("editorFontSize") private var fontSize: Double = 14.0
@@ -330,7 +332,7 @@ struct NotesDayView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Button(action: { changeDate(by: -1) }) {
+                Button(action: { animateTransition(direction: -1) }) {
                     Image(systemName: "chevron.left")
                     .font(.system(size: 14))
                     .foregroundColor(.primary)
@@ -344,10 +346,11 @@ struct NotesDayView: View {
                 Text(formattedDate(viewModel.selectedDate))
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.primary)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedDate)
                 
                 Spacer()
                 
-                Button(action: { changeDate(by: 1) }) {
+                Button(action: { animateTransition(direction: 1) }) {
                     Image(systemName: "chevron.right")
                     .font(.system(size: 14))
                     .foregroundColor(.primary)
@@ -359,7 +362,11 @@ struct NotesDayView: View {
                 Spacer()
                     .frame(width: 16)
                 
-                Button(action: { viewModel.selectedDate = Date() }) {
+                Button(action: {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                        viewModel.selectedDate = Date()
+                    }
+                }) {
                     Image(systemName: "calendar")
                         .font(.system(size: 14))
                         .foregroundColor(.primary)
@@ -465,20 +472,23 @@ struct NotesDayView: View {
             
             NotesRichTextEditor(text: $noteText, actionWrapper: $editorActionWrapper, fontName: fontName, fontSize: fontSize)
                 .background(Color(nsColor: .textBackgroundColor))
+                .opacity(contentOpacity)
+                .offset(x: contentOffsetX)
                 .onAppear {
                     noteText = viewModel.noteText(for: viewModel.selectedDate)
-                }
-                .onChange(of: viewModel.selectedDate) { _, newDate in
-                    noteText = viewModel.noteText(for: newDate)
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        contentOpacity = 1.0
+                        contentOffsetX = 0
+                    }
                 }
                 .onChange(of: noteText) { _, newText in
                     viewModel.setNoteText(newText, for: viewModel.selectedDate)
                 }
         }
         .onSwipe(left: {
-            withAnimation { changeDate(by: 1) }
+            animateTransition(direction: 1)
         }, right: {
-            withAnimation { changeDate(by: -1) }
+            animateTransition(direction: -1)
         })
         .background(Color(nsColor: .textBackgroundColor))
         .cornerRadius(12)
@@ -490,6 +500,24 @@ struct NotesDayView: View {
     private func changeDate(by days: Int) {
         if let newDate = Calendar.current.date(byAdding: .day, value: days, to: viewModel.selectedDate) {
             viewModel.selectedDate = newDate
+        }
+    }
+    
+    private func animateTransition(direction: Int) {
+        withAnimation(.easeOut(duration: 0.15)) {
+            contentOpacity = 0
+            contentOffsetX = CGFloat(direction * -50)
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            changeDate(by: direction)
+            noteText = viewModel.noteText(for: viewModel.selectedDate)
+            contentOffsetX = CGFloat(direction * 50)
+            
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                contentOpacity = 1.0
+                contentOffsetX = 0
+            }
         }
     }
     

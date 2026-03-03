@@ -7,8 +7,16 @@ struct TaskDetailView: View {
     
     @State private var newSubtaskTitle = ""
     @State private var isEditingTitle = false
+    @State private var showCalendar = false
     @State private var scale: CGFloat = 0.8
     @State private var opacity: Double = 0.0
+    
+    private var dateFormatter: DateFormatter {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.locale = Locale(identifier: "en_US")
+        return f
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -119,28 +127,67 @@ struct TaskDetailView: View {
                 }
             }
             
-            HStack(alignment: .top, spacing: 24) {
-                VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 20) {
+                HStack(alignment: .center, spacing: 12) {
                     Text("Date")
                         .font(.headline)
-                    DatePicker("", selection: $task.date, displayedComponents: .date)
-                        .datePickerStyle(.graphical)
-                        .labelsHidden()
-                        .frame(maxWidth: 260, maxHeight: 240)
-                }
-                
-                VStack(alignment: .leading, spacing: 12) {
-                    Toggle("Someday (Inbox)", isOn: $task.isInbox)
-                        .toggleStyle(.switch)
-                    
-                    Button("Move to tomorrow") {
-                        viewModel.moveTaskToNextDay(task)
-                        dismiss()
+                        .frame(width: 44, alignment: .leading)
+                    Button(action: { showCalendar = true }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "calendar")
+                                .font(.system(size: 13))
+                            Text(dateFormatter.string(from: task.date))
+                                .font(.system(size: 14))
+                        }
+                        .frame(minWidth: 140, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .cornerRadius(8)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $showCalendar, arrowEdge: .bottom) {
+                        DatePicker("", selection: $task.date, displayedComponents: .date)
+                            .datePickerStyle(.graphical)
+                            .labelsHidden()
+                            .frame(width: 280, height: 260)
+                            .padding(8)
+                    }
                 }
                 
-                Spacer()
+                Toggle(isOn: $task.isInbox) {
+                    Text("Inbox")
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+                .toggleStyle(.switch)
+                .help("Someday (Inbox)")
+                
+                Button("Move to tomorrow") {
+                    viewModel.moveTaskToNextDay(task)
+                    dismiss()
+                }
+                .buttonStyle(.bordered)
+                .frame(maxWidth: .infinity)
+            }
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Notes / Description")
+                    .font(.headline)
+                TextEditor(text: Binding(
+                    get: { task.notes ?? "" },
+                    set: { newValue in
+                        var copy = task
+                        copy.notes = newValue.isEmpty ? nil : newValue
+                        task = copy
+                    }
+                ))
+                .font(.body)
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: 60, maxHeight: 120)
+                .padding(8)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(8)
             }
             
             Divider()
@@ -172,7 +219,7 @@ struct TaskDetailView: View {
             }
         }
         .padding()
-        .frame(width: 500, height: 520)
+        .frame(width: 500, height: 620)
         .scaleEffect(scale)
         .opacity(opacity)
         .onAppear {

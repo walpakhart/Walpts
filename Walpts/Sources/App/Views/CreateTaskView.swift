@@ -7,6 +7,7 @@ struct CreateTaskView: View {
     var isInbox: Bool = false
     
     @State private var title = ""
+    @State private var taskType: TaskType = .work
     @State private var priority: Priority = .medium
     @State private var scale: CGFloat = 0.8
     @State private var opacity: Double = 0.0
@@ -16,6 +17,13 @@ struct CreateTaskView: View {
             Text("New task")
                 .font(.headline)
                 .foregroundColor(.primary)
+            
+            Picker("Type", selection: $taskType) {
+                ForEach(TaskType.allCases, id: \.self) { type in
+                    Text(type.rawValue).tag(type)
+                }
+            }
+            .pickerStyle(.segmented)
             
             TextField("Task title", text: $title)
                 .textFieldStyle(.roundedBorder)
@@ -42,9 +50,9 @@ struct CreateTaskView: View {
                 
                 Button("Create") {
                     if isInbox {
-                        viewModel.addInboxTask(title: title, type: .discussion, priority: priority)
+                        viewModel.addInboxTask(title: title, type: taskType, priority: priority)
                     } else if let date = date {
-                        viewModel.addTask(title: title, type: .discussion, date: date, priority: priority)
+                        viewModel.addTask(title: title, type: taskType, date: date, priority: priority)
                     }
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         scale = 0.8
@@ -60,7 +68,7 @@ struct CreateTaskView: View {
             }
         }
         .padding()
-        .frame(width: 380, height: 260)
+        .frame(width: 380, height: 300)
         .background(Color(nsColor: .windowBackgroundColor))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 6)

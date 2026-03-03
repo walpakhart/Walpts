@@ -35,6 +35,8 @@ struct TaskItem: Identifiable, Codable {
     var date: Date
     var isInbox: Bool = false
     
+    var notes: String?
+    
     var startTime: Date?
     var endTime: Date?
     
