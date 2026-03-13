@@ -39,6 +39,43 @@ final class TaskStorage {
     }
 }
 
+final class EpicStorage {
+    static let shared = EpicStorage()
+    
+    private let fileURL: URL
+    private let queue = DispatchQueue(label: "EpicStorageQueue", qos: .background)
+    
+    private init() {
+        let fileManager = FileManager.default
+        let baseDir = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        let appDir = baseDir.appendingPathComponent("Walpts", isDirectory: true)
+        try? fileManager.createDirectory(at: appDir, withIntermediateDirectories: true)
+        fileURL = appDir.appendingPathComponent("epics.json")
+    }
+    
+    func load() -> [Epic] {
+        do {
+            let data = try Data(contentsOf: fileURL)
+            let decoder = JSONDecoder()
+            return try decoder.decode([Epic].self, from: data)
+        } catch {
+            return []
+        }
+    }
+    
+    func save(_ epics: [Epic]) {
+        queue.async {
+            do {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                let data = try encoder.encode(epics)
+                try data.write(to: self.fileURL, options: .atomic)
+            } catch {
+            }
+        }
+    }
+}
+
 final class NoteStorage {
     static let shared = NoteStorage()
     

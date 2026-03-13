@@ -3,10 +3,14 @@ import SwiftUI
 struct TaskRow: View {
     let task: TaskItem
     var onNextStatus: (() -> Void)?
+    var onRevertStatus: (() -> Void)?
+    var onMoveUp: (() -> Void)?
+    var onMoveDown: (() -> Void)?
     var onTap: () -> Void
     
     @State private var isAppearing = false
     @State private var isPressed = false
+    @State private var lastTapTime: Date?
     
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -47,14 +51,48 @@ struct TaskRow: View {
             
             Spacer()
             
-            if let onNextStatus = onNextStatus {
-                Button(action: onNextStatus) {
+            if onNextStatus != nil || onRevertStatus != nil {
+                Button(action: {
+                    let now = Date()
+                    if let last = lastTapTime, now.timeIntervalSince(last) < 0.35 {
+                        onRevertStatus?()
+                        lastTapTime = nil
+                    } else {
+                        lastTapTime = now
+                        onNextStatus?()
+                    }
+                }) {
                     Text(statusTitle(task.status))
                         .font(.system(size: 11, weight: .medium))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                 }
                 .buttonStyle(.bordered)
+                .help("Click: next status. Double-click: previous status")
+            }
+            
+            if onMoveUp != nil || onMoveDown != nil {
+                VStack(spacing: 0) {
+                    Button(action: { onMoveUp?() }) {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 10, weight: .semibold))
+                            .frame(width: 24, height: 16)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.borderless)
+                    .opacity(onMoveUp != nil ? 1 : 0.3)
+                    .allowsHitTesting(onMoveUp != nil)
+                    Button(action: { onMoveDown?() }) {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .frame(width: 24, height: 16)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.borderless)
+                    .opacity(onMoveDown != nil ? 1 : 0.3)
+                    .allowsHitTesting(onMoveDown != nil)
+                }
+                .help("Move task up/down")
             }
         }
         .padding(.vertical, 10)

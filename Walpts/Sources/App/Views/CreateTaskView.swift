@@ -9,6 +9,7 @@ struct CreateTaskView: View {
     @State private var title = ""
     @State private var taskType: TaskType = .work
     @State private var priority: Priority = .medium
+    @State private var selectedEpicId: UUID?
     @State private var scale: CGFloat = 0.8
     @State private var opacity: Double = 0.0
     
@@ -34,6 +35,20 @@ struct CreateTaskView: View {
                 }
             }
             
+            if !viewModel.epics.isEmpty {
+                HStack {
+                    Text("Project:")
+                    Menu {
+                        Button("None") { selectedEpicId = nil }
+                        ForEach(viewModel.epics) { epic in
+                            Button(epic.name) { selectedEpicId = epic.id }
+                        }
+                    } label: {
+                        Text(viewModel.epics.first(where: { $0.id == selectedEpicId })?.name ?? "None")
+                    }
+                }
+            }
+            
             HStack {
                 Button("Cancel") {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -50,9 +65,9 @@ struct CreateTaskView: View {
                 
                 Button("Create") {
                     if isInbox {
-                        viewModel.addInboxTask(title: title, type: taskType, priority: priority)
+                        viewModel.addInboxTask(title: title, type: taskType, priority: priority, epicId: selectedEpicId)
                     } else if let date = date {
-                        viewModel.addTask(title: title, type: taskType, date: date, priority: priority)
+                        viewModel.addTask(title: title, type: taskType, date: date, priority: priority, epicId: selectedEpicId)
                     }
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         scale = 0.8

@@ -125,6 +125,22 @@ struct TaskDetailView: View {
                         Text(task.priority.rawValue)
                     }
                 }
+                
+                HStack {
+                    Text("Project:")
+                    Menu {
+                        Button("None") {
+                            viewModel.updateTaskEpic(task, epicId: nil)
+                        }
+                        ForEach(viewModel.epics) { epic in
+                            Button(epic.name) {
+                                viewModel.updateTaskEpic(task, epicId: epic.id)
+                            }
+                        }
+                    } label: {
+                        Text(viewModel.epics.first(where: { $0.id == task.epicId })?.name ?? "None")
+                    }
+                }
             }
             
             HStack(alignment: .center, spacing: 20) {
@@ -195,18 +211,24 @@ struct TaskDetailView: View {
             Text("Subtasks")
                 .font(.headline)
             
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    ForEach($task.subtasks) { $subtask in
-                        SubtaskRowView(subtask: $subtask, onDelete: {
-                            if let index = task.subtasks.firstIndex(where: { $0.id == subtask.id }) {
-                                task.subtasks.remove(at: index)
-                            }
-                        })
-                    }
+            List {
+                ForEach($task.subtasks) { $subtask in
+                    SubtaskRowView(subtask: $subtask, onDelete: {
+                        if let index = task.subtasks.firstIndex(where: { $0.id == subtask.id }) {
+                            task.subtasks.remove(at: index)
+                        }
+                    })
+                    .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
+                    .listRowBackground(Color.clear)
                 }
-                .padding(.vertical, 4)
+                .onMove { source, destination in
+                    var st = task.subtasks
+                    st.move(fromOffsets: source, toOffset: destination)
+                    task.subtasks = st
+                }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
             .frame(maxHeight: 180)
             
             HStack {

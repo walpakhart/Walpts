@@ -14,6 +14,12 @@ class TaskViewModel: ObservableObject {
         }
     }
     
+    @Published var epics: [Epic] = [] {
+        didSet {
+            EpicStorage.shared.save(epics)
+        }
+    }
+    
     @Published var selectedDate: Date = Date()
     @Published var activeTab: ContentView.ViewType = .day
     
@@ -31,56 +37,48 @@ class TaskViewModel: ObservableObject {
         }
         
         notes = NoteStorage.shared.load()
+        epics = EpicStorage.shared.load()
     }
     
-    func addTask(title: String, type: TaskType, date: Date, priority: Priority = .medium) {
+    func statusSeverity(_ status: TaskStatus) -> Int {
+        switch status {
+        case .discussion: return 0
+        case .pending: return 1
+        case .approved: return 2
+        case .inProgress: return 3
+        case .completed: return 4
+        case .reported: return 5
+        }
+    }
+    
+    private func isCompletedOrReported(_ task: TaskItem) -> Bool {
+        task.status == .completed || task.status == .reported
+    }
+    
+    private func orderValue(_ task: TaskItem) -> Int {
+        task.orderIndex ?? Int.max
+    }
+    
+    func addTask(title: String, type: TaskType, date: Date, priority: Priority = .medium, epicId: UUID? = nil) {
         let status: TaskStatus = type == .discussion ? .discussion : .pending
-        let newTask = TaskItem(title: title, type: type, status: status, priority: priority, date: Calendar.current.startOfDay(for: date), isInbox: false)
+        let day = Calendar.current.startOfDay(for: date)
+        let dayTasks = tasks.filter { Calendar.current.isDate($0.date, inSameDayAs: day) && !$0.isInbox }
+        let maxOrder = dayTasks.compactMap(\.orderIndex).max() ?? -1
+        var newTask = TaskItem(title: title, type: type, status: status, priority: priority, date: day, isInbox: false, orderIndex: maxOrder + 1, epicId: epicId)
         tasks.append(newTask)
     }
     
-    func addInboxTask(title: String, type: TaskType, priority: Priority = .medium) {
+    func addInboxTask(title: String, type: TaskType, priority: Priority = .medium, epicId: UUID? = nil) {
         let today = Calendar.current.startOfDay(for: Date())
         let status: TaskStatus = type == .discussion ? .discussion : .pending
-        let newTask = TaskItem(title: title, type: type, status: status, priority: priority, date: today, isInbox: true)
+        let inbox = tasks.filter(\.isInbox)
+        let maxOrder = inbox.compactMap(\.orderIndex).max() ?? -1
+        var newTask = TaskItem(title: title, type: type, status: status, priority: priority, date: today, isInbox: true, orderIndex: maxOrder + 1, epicId: epicId)
         tasks.append(newTask)
     }
     
     func deleteTask(_ task: TaskItem) {
         tasks.removeAll { $0.id == task.id }
-    }
-    
-    func updateStatus(for task: TaskItem) {
-        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
-        var updatedTask = tasks[index]
-        
-        switch updatedTask.status {
-        case .discussion:
-            updatedTask.status = .pending
-            updatedTask.startTime = nil
-            updatedTask.endTime = nil
-            let day = Calendar.current.startOfDay(for: selectedDate)
-            updatedTask.date = day
-        case .pending:
-            updatedTask.status = .inProgress
-            updatedTask.startTime = Date()
-            updatedTask.endTime = nil
-        case .approved:
-            updatedTask.status = .inProgress
-            if updatedTask.startTime == nil {
-                updatedTask.startTime = Date()
-            }
-            updatedTask.endTime = nil
-        case .inProgress:
-            updatedTask.status = .completed
-            updatedTask.endTime = Date()
-        case .completed:
-            updatedTask.status = .reported
-        case .reported:
-            break
-        }
-        
-        tasks[index] = updatedTask
     }
     
     func revertStatus(for task: TaskItem) {
@@ -113,6 +111,7 @@ class TaskViewModel: ObservableObject {
         guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
         var updatedTask = tasks[index]
         let oldStatus = updatedTask.status
+        let calendar = Calendar.current
         
         // Если переводим в InProgress -> сбрасываем endTime, ставим startTime если нет
         if newStatus == .inProgress {
@@ -134,34 +133,190 @@ class TaskViewModel: ObservableObject {
         }
         
         updatedTask.status = newStatus
+        if newStatus == .completed || newStatus == .reported {
+            let dayTasks = tasks.filter { calendar.isDate(updatedTask.date, inSameDayAs: $0.date) && !$0.isInbox }
+            let maxOrder = dayTasks.compactMap(\.orderIndex).max() ?? 0
+            updatedTask.orderIndex = maxOrder + 1
+        }
+        tasks[index] = updatedTask
+    }
+    
+    func updateStatus(for task: TaskItem) {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        var updatedTask = tasks[index]
+        let calendar = Calendar.current
+        
+        switch updatedTask.status {
+        case .discussion:
+            updatedTask.status = .pending
+            updatedTask.startTime = nil
+            updatedTask.endTime = nil
+            let day = calendar.startOfDay(for: selectedDate)
+            updatedTask.date = day
+        case .pending:
+            updatedTask.status = .inProgress
+            updatedTask.startTime = Date()
+            updatedTask.endTime = nil
+        case .approved:
+            updatedTask.status = .inProgress
+            if updatedTask.startTime == nil {
+                updatedTask.startTime = Date()
+            }
+            updatedTask.endTime = nil
+        case .inProgress:
+            updatedTask.status = .completed
+            updatedTask.endTime = Date()
+            let dayTasks = tasks.filter { calendar.isDate(updatedTask.date, inSameDayAs: $0.date) && !$0.isInbox }
+            let maxOrder = dayTasks.compactMap(\.orderIndex).max() ?? 0
+            updatedTask.orderIndex = maxOrder + 1
+        case .completed:
+            updatedTask.status = .reported
+            let dayTasks = tasks.filter { calendar.isDate(updatedTask.date, inSameDayAs: $0.date) && !$0.isInbox }
+            let maxOrder = dayTasks.compactMap(\.orderIndex).max() ?? 0
+            updatedTask.orderIndex = maxOrder + 1
+        case .reported:
+            break
+        }
+        
         tasks[index] = updatedTask
     }
     
     func tasksForDate(_ date: Date) -> [TaskItem] {
         let calendar = Calendar.current
         let filtered = tasks.filter { calendar.isDate($0.date, inSameDayAs: date) && !$0.isInbox }
-        
-        // Сортировка: Высокий -> Средний -> Низкий приоритет
         return filtered.sorted { t1, t2 in
-            let p1 = priorityValue(t1.priority)
-            let p2 = priorityValue(t2.priority)
-            if p1 == p2 {
-                return t1.title < t2.title
-            }
-            return p1 > p2
+            let c1 = isCompletedOrReported(t1), c2 = isCompletedOrReported(t2)
+            if c1 != c2 { return !c1 }
+            if orderValue(t1) != orderValue(t2) { return orderValue(t1) < orderValue(t2) }
+            let p1 = priorityValue(t1.priority), p2 = priorityValue(t2.priority)
+            if p1 != p2 { return p1 > p2 }
+            return t1.title < t2.title
         }
     }
 
     func discussionTasks() -> [TaskItem] {
         let filtered = tasks.filter { $0.status == .discussion && !$0.isInbox }
         return filtered.sorted { t1, t2 in
-            let p1 = priorityValue(t1.priority)
-            let p2 = priorityValue(t2.priority)
-            if p1 == p2 {
-                return t1.title < t2.title
-            }
-            return p1 > p2
+            if orderValue(t1) != orderValue(t2) { return orderValue(t1) < orderValue(t2) }
+            let p1 = priorityValue(t1.priority), p2 = priorityValue(t2.priority)
+            if p1 != p2 { return p1 > p2 }
+            return t1.title < t2.title
         }
+    }
+    
+    func moveTaskDay(from source: IndexSet, to destination: Int, date: Date) {
+        var sorted = tasksForDate(date)
+        sorted.move(fromOffsets: source, toOffset: destination)
+        for (i, task) in sorted.enumerated() {
+            if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
+                tasks[idx].orderIndex = i
+            }
+        }
+    }
+    
+    func moveTaskInbox(from source: IndexSet, to destination: Int) {
+        var sorted = inboxTasks()
+        sorted.move(fromOffsets: source, toOffset: destination)
+        for (i, task) in sorted.enumerated() {
+            if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
+                tasks[idx].orderIndex = i
+            }
+        }
+    }
+    
+    func moveTaskDayUp(_ task: TaskItem, date: Date) {
+        var sorted = tasksForDate(date)
+        guard let idx = sorted.firstIndex(where: { $0.id == task.id }), idx > 0 else { return }
+        sorted.swapAt(idx, idx - 1)
+        for (i, t) in sorted.enumerated() {
+            if let j = tasks.firstIndex(where: { $0.id == t.id }) {
+                tasks[j].orderIndex = i
+            }
+        }
+    }
+    
+    func moveTaskDayDown(_ task: TaskItem, date: Date) {
+        var sorted = tasksForDate(date)
+        guard let idx = sorted.firstIndex(where: { $0.id == task.id }), idx < sorted.count - 1 else { return }
+        sorted.swapAt(idx, idx + 1)
+        for (i, t) in sorted.enumerated() {
+            if let j = tasks.firstIndex(where: { $0.id == t.id }) {
+                tasks[j].orderIndex = i
+            }
+        }
+    }
+    
+    func moveTaskInboxUp(_ task: TaskItem) {
+        var sorted = inboxTasks()
+        guard let idx = sorted.firstIndex(where: { $0.id == task.id }), idx > 0 else { return }
+        sorted.swapAt(idx, idx - 1)
+        for (i, t) in sorted.enumerated() {
+            if let j = tasks.firstIndex(where: { $0.id == t.id }) {
+                tasks[j].orderIndex = i
+            }
+        }
+    }
+    
+    func moveTaskInboxDown(_ task: TaskItem) {
+        var sorted = inboxTasks()
+        guard let idx = sorted.firstIndex(where: { $0.id == task.id }), idx < sorted.count - 1 else { return }
+        sorted.swapAt(idx, idx + 1)
+        for (i, t) in sorted.enumerated() {
+            if let j = tasks.firstIndex(where: { $0.id == t.id }) {
+                tasks[j].orderIndex = i
+            }
+        }
+    }
+
+    func sortTasksByStatusForDate(_ date: Date) {
+        let calendar = Calendar.current
+        var dayTasks = tasks.filter { calendar.isDate($0.date, inSameDayAs: date) && !$0.isInbox }
+        dayTasks.sort { t1, t2 in
+            let c1 = isCompletedOrReported(t1), c2 = isCompletedOrReported(t2)
+            if c1 != c2 { return !c1 }
+            if statusSeverity(t1.status) != statusSeverity(t2.status) { return statusSeverity(t1.status) < statusSeverity(t2.status) }
+            return priorityValue(t1.priority) > priorityValue(t2.priority)
+        }
+        for (i, task) in dayTasks.enumerated() {
+            if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
+                tasks[idx].orderIndex = i
+            }
+        }
+    }
+    
+    func sortTasksByStatusInbox() {
+        var inbox = tasks.filter(\.isInbox)
+        inbox.sort { statusSeverity($0.status) < statusSeverity($1.status) }
+        for (i, task) in inbox.enumerated() {
+            if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
+                tasks[idx].orderIndex = i
+            }
+        }
+    }
+    
+    func tasksForEpic(_ epicId: UUID) -> [TaskItem] {
+        tasks.filter { $0.epicId == epicId }.sorted { orderValue($0) < orderValue($1) }
+    }
+    
+    func addEpic(name: String) {
+        epics.append(Epic(name: name))
+    }
+    
+    func updateEpic(id: UUID, name: String) {
+        guard let idx = epics.firstIndex(where: { $0.id == id }) else { return }
+        epics[idx].name = name
+    }
+    
+    func deleteEpic(_ epic: Epic) {
+        epics.removeAll { $0.id == epic.id }
+        for i in tasks.indices where tasks[i].epicId == epic.id {
+            tasks[i].epicId = nil
+        }
+    }
+    
+    func updateTaskEpic(_ task: TaskItem, epicId: UUID?) {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        tasks[index].epicId = epicId
     }
     
     private func priorityValue(_ p: Priority) -> Int {
@@ -186,7 +341,7 @@ class TaskViewModel: ObservableObject {
     }
     
     func inboxTasks() -> [TaskItem] {
-        tasks.filter { $0.isInbox }
+        tasks.filter(\.isInbox).sorted { orderValue($0) < orderValue($1) }
     }
     
     /// Выполненные задачи (completed или reported) за указанный день

@@ -26,6 +26,11 @@ struct SubTask: Identifiable, Codable {
     var isCompleted: Bool = false
 }
 
+struct Epic: Identifiable, Codable {
+    var id: UUID = UUID()
+    var name: String
+}
+
 struct TaskItem: Identifiable, Codable {
     var id: UUID = UUID()
     var title: String
@@ -36,6 +41,8 @@ struct TaskItem: Identifiable, Codable {
     var isInbox: Bool = false
     
     var notes: String?
+    var orderIndex: Int?
+    var epicId: UUID?
     
     var startTime: Date?
     var endTime: Date?

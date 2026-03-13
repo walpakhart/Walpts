@@ -100,7 +100,16 @@ struct CompletedView: View {
                                     ForEach(section.tasks) { task in
                                         TaskRow(
                                             task: task,
-                                            onNextStatus: nil,
+                                            onNextStatus: {
+                                                withAnimation {
+                                                    viewModel.updateStatus(for: task)
+                                                }
+                                            },
+                                            onRevertStatus: {
+                                                withAnimation {
+                                                    viewModel.revertStatus(for: task)
+                                                }
+                                            },
                                             onTap: { selectedTask = task }
                                         )
                                     }

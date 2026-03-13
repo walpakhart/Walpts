@@ -61,23 +61,36 @@ struct DayView: View {
             .padding(.vertical, 12)
             .background(Color(nsColor: .controlBackgroundColor))
             
-            ScrollView {
-                LazyVStack(spacing: 12) {
-                    let allTasks = viewModel.tasksForDate(viewModel.selectedDate)
-                    let dayTasks = allTasks.filter { $0.status != .discussion }
-                    let discussion = viewModel.discussionTasks()
-                    
-                    if dayTasks.isEmpty && discussion.isEmpty {
-                        VStack(spacing: 12) {
-                            Text("No tasks")
-                                .font(.system(size: 14))
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.top, 40)
-                        .transition(.opacity.combined(with: .scale))
-                    } else {
-                        if !dayTasks.isEmpty {
-                            ForEach(dayTasks) { task in
+            HStack(alignment: .center, spacing: 8) {
+                Spacer()
+                Button(action: {
+                    withAnimation { viewModel.sortTasksByStatusForDate(viewModel.selectedDate) }
+                }) {
+                    Label("Sort by status", systemImage: "arrow.up.arrow.down.circle")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.borderless)
+                .padding(.trailing, 8)
+            }
+            .padding(.top, 4)
+            
+            List {
+                let allTasks = viewModel.tasksForDate(viewModel.selectedDate)
+                let dayTasks = allTasks.filter { $0.status != .discussion }
+                let discussion = viewModel.discussionTasks()
+                
+                if dayTasks.isEmpty && discussion.isEmpty {
+                    Section {
+                        Text("No tasks")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .listRowBackground(Color.clear)
+                    }
+                } else {
+                    if !dayTasks.isEmpty {
+                        Section {
+                            ForEach(Array(dayTasks.enumerated()), id: \.element.id) { index, task in
                                 TaskRow(
                                     task: task,
                                     onNextStatus: {
@@ -85,46 +98,65 @@ struct DayView: View {
                                             viewModel.updateStatus(for: task)
                                         }
                                     },
+                                    onRevertStatus: {
+                                        withAnimation {
+                                            viewModel.revertStatus(for: task)
+                                        }
+                                    },
+                                    onMoveUp: index > 0 ? {
+                                        withAnimation {
+                                            viewModel.moveTaskDayUp(task, date: viewModel.selectedDate)
+                                        }
+                                    } : nil,
+                                    onMoveDown: index < dayTasks.count - 1 ? {
+                                        withAnimation {
+                                            viewModel.moveTaskDayDown(task, date: viewModel.selectedDate)
+                                        }
+                                    } : nil,
                                     onTap: {
                                         selectedTask = task
                                     }
                                 )
+                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                                .listRowBackground(Color(nsColor: .textBackgroundColor))
+                                .listRowSeparator(.hidden)
                             }
                         }
-                        
-                        if !discussion.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                if !dayTasks.isEmpty {
-                                    Divider()
-                                }
-                                
-                                Text("Discussion")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                                
-                                ForEach(discussion) { task in
-                                    TaskRow(
-                                        task: task,
-                                        onNextStatus: {
-                                            withAnimation {
-                                                viewModel.updateStatus(for: task)
-                                            }
-                                        },
-                                        onTap: {
-                                            selectedTask = task
+                    }
+                    
+                    if !discussion.isEmpty {
+                        Section(header: Text("Discussion")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.secondary)) {
+                            ForEach(discussion) { task in
+                                TaskRow(
+                                    task: task,
+                                    onNextStatus: {
+                                        withAnimation {
+                                            viewModel.updateStatus(for: task)
                                         }
-                                    )
-                                }
+                                    },
+                                    onRevertStatus: {
+                                        withAnimation {
+                                            viewModel.revertStatus(for: task)
+                                        }
+                                    },
+                                    onTap: {
+                                        selectedTask = task
+                                    }
+                                )
+                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                                .listRowBackground(Color(nsColor: .textBackgroundColor))
+                                .listRowSeparator(.hidden)
                             }
                         }
                     }
                 }
-                .padding(.vertical)
-                .padding(.horizontal, 16)
-                .opacity(contentOpacity)
-                .offset(x: contentOffset)
             }
-            .background(Color.clear)
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .opacity(contentOpacity)
+            .offset(x: contentOffset)
             .gesture(
                 DragGesture()
                     .onEnded { value in
@@ -237,23 +269,31 @@ struct InboxView: View {
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.primary)
                 Spacer()
+                Button(action: {
+                    withAnimation { viewModel.sortTasksByStatusInbox() }
+                }) {
+                    Label("Sort by status", systemImage: "arrow.up.arrow.down.circle")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.borderless)
             }
             .padding(.horizontal)
             .padding(.vertical, 12)
             .background(Color(nsColor: .controlBackgroundColor))
             
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    let tasks = viewModel.inboxTasks()
-                    if tasks.isEmpty {
-                        VStack(spacing: 12) {
-                            Text("No inbox tasks")
-                                .font(.system(size: 14))
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.top, 40)
-                    } else {
-                        ForEach(tasks) { task in
+            List {
+                let tasks = viewModel.inboxTasks()
+                if tasks.isEmpty {
+                    Section {
+                        Text("No inbox tasks")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .listRowBackground(Color.clear)
+                    }
+                } else {
+                    Section {
+                        ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
                             TaskRow(
                                 task: task,
                                 onNextStatus: {
@@ -261,16 +301,34 @@ struct InboxView: View {
                                         viewModel.updateStatus(for: task)
                                     }
                                 },
+                                onRevertStatus: {
+                                    withAnimation {
+                                        viewModel.revertStatus(for: task)
+                                    }
+                                },
+                                onMoveUp: index > 0 ? {
+                                    withAnimation {
+                                        viewModel.moveTaskInboxUp(task)
+                                    }
+                                } : nil,
+                                onMoveDown: index < tasks.count - 1 ? {
+                                    withAnimation {
+                                        viewModel.moveTaskInboxDown(task)
+                                    }
+                                } : nil,
                                 onTap: {
                                     selectedTask = task
                                 }
                             )
+                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                            .listRowBackground(Color(nsColor: .textBackgroundColor))
+                            .listRowSeparator(.hidden)
                         }
                     }
                 }
-                .padding(.vertical)
-                .padding(.horizontal, 16)
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
         }
         .background(Color(nsColor: .textBackgroundColor))
         .cornerRadius(12)
@@ -559,7 +617,7 @@ struct NotesWeekView: View {
                 .onAppear {
                     scrollToSelectedDate(proxy: proxy)
                 }
-                .onChange(of: viewModel.selectedDate) { _ in
+                .onChange(of: viewModel.selectedDate) { _, _ in
                     // Optional: scroll on external change
                 }
             }
