@@ -10,6 +10,8 @@ struct TaskDetailView: View {
     @State private var showCalendar = false
     @State private var scale: CGFloat = 0.8
     @State private var opacity: Double = 0.0
+    @State private var draggingSubtask: SubTask?
+    @State private var subtaskDragOffset: CGFloat = 0
     
     private var dateFormatter: DateFormatter {
         let f = DateFormatter()
@@ -211,25 +213,57 @@ struct TaskDetailView: View {
             Text("Subtasks")
                 .font(.headline)
             
-            List {
-                ForEach($task.subtasks) { $subtask in
-                    SubtaskRowView(subtask: $subtask, onDelete: {
-                        if let index = task.subtasks.firstIndex(where: { $0.id == subtask.id }) {
-                            task.subtasks.remove(at: index)
-                        }
-                    })
-                    .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
-                    .listRowBackground(Color.clear)
+            ScrollView {
+                VStack(spacing: 6) {
+                    ForEach(Array(task.subtasks.enumerated()), id: \.element.id) { index, subtask in
+                        let isDragging = draggingSubtask?.id == subtask.id
+                        SubtaskRowView(
+                            subtask: Binding(
+                                get: { task.subtasks.first(where: { $0.id == subtask.id }) ?? subtask },
+                                set: { newVal in
+                                    if let i = task.subtasks.firstIndex(where: { $0.id == subtask.id }) {
+                                        task.subtasks[i] = newVal
+                                    }
+                                }
+                            ),
+                            onDelete: {
+                                if let i = task.subtasks.firstIndex(where: { $0.id == subtask.id }) {
+                                    task.subtasks.remove(at: i)
+                                }
+                            },
+                            onGripDragChanged: { delta in
+                                if draggingSubtask == nil {
+                                    withAnimation(.spring(response: 0.2, dampingFraction: 0.9)) {
+                                        draggingSubtask = subtask
+                                    }
+                                }
+                                subtaskDragOffset = delta
+                            },
+                            onGripDragEnded: { delta in
+                                let slotH: CGFloat = 46
+                                let fromIdx = task.subtasks.firstIndex(where: { $0.id == subtask.id }) ?? index
+                                let targetIdx = max(0, min(task.subtasks.count - 1, fromIdx + Int(round(delta / slotH))))
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    if targetIdx != fromIdx {
+                                        task.subtasks.move(fromOffsets: IndexSet(integer: fromIdx), toOffset: targetIdx > fromIdx ? targetIdx + 1 : targetIdx)
+                                    }
+                                    draggingSubtask = nil
+                                    subtaskDragOffset = 0
+                                }
+                            }
+                        )
+                        .offset(y: subtaskVisualOffset(subtaskId: subtask.id, index: index))
+                        .scaleEffect(isDragging ? 1.03 : 1.0)
+                        .shadow(color: isDragging ? .black.opacity(0.18) : .clear,
+                                radius: isDragging ? 10 : 0,
+                                x: 0, y: isDragging ? 5 : 0)
+                        .zIndex(isDragging ? 1 : 0)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: draggingSubtask?.id)
+                    }
                 }
-                .onMove { source, destination in
-                    var st = task.subtasks
-                    st.move(fromOffsets: source, toOffset: destination)
-                    task.subtasks = st
-                }
+                .padding(.vertical, 2)
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .frame(maxHeight: 180)
+            .frame(maxHeight: 200)
             
             HStack {
                 TextField("New subtask", text: $newSubtaskTitle)
@@ -252,6 +286,21 @@ struct TaskDetailView: View {
         }
     }
     
+    private func subtaskVisualOffset(subtaskId: UUID, index: Int) -> CGFloat {
+        let slotH: CGFloat = 46
+        guard let dragging = draggingSubtask,
+              let fromIdx = task.subtasks.firstIndex(where: { $0.id == dragging.id }) else { return 0 }
+        if subtaskId == dragging.id { return subtaskDragOffset }
+        let rawTarget = CGFloat(fromIdx) + subtaskDragOffset / slotH
+        let targetIdx = Int(max(0, min(CGFloat(task.subtasks.count - 1), rawTarget)).rounded())
+        if fromIdx < targetIdx {
+            if index > fromIdx && index <= targetIdx { return -slotH }
+        } else if fromIdx > targetIdx {
+            if index >= targetIdx && index < fromIdx { return slotH }
+        }
+        return 0
+    }
+
     private func addSubtask() {
         let newSub = SubTask(title: newSubtaskTitle)
         task.subtasks.append(newSub)
@@ -279,7 +328,9 @@ struct TaskDetailView: View {
 struct SubtaskRowView: View {
     @Binding var subtask: SubTask
     var onDelete: () -> Void
-    
+    var onGripDragChanged: ((CGFloat) -> Void)? = nil
+    var onGripDragEnded: ((CGFloat) -> Void)? = nil
+
     @State private var isEditing = false
     
     var body: some View {
@@ -325,6 +376,18 @@ struct SubtaskRowView: View {
             }
             .buttonStyle(.borderless)
             .foregroundColor(.red.opacity(0.8))
+            
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.secondary.opacity(0.4))
+                .frame(width: 20, height: 28)
+                .contentShape(Rectangle())
+                .help("Drag to reorder")
+                .gesture(
+                    DragGesture(minimumDistance: 4, coordinateSpace: .global)
+                        .onChanged { v in onGripDragChanged?(v.translation.height) }
+                        .onEnded { v in onGripDragEnded?(v.translation.height) }
+                )
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -332,3 +395,4 @@ struct SubtaskRowView: View {
         .cornerRadius(8)
     }
 }
+

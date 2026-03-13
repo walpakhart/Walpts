@@ -4,9 +4,10 @@ struct TaskRow: View {
     let task: TaskItem
     var onNextStatus: (() -> Void)?
     var onRevertStatus: (() -> Void)?
-    var onMoveUp: (() -> Void)?
-    var onMoveDown: (() -> Void)?
+    var projectName: String? = nil
     var onTap: () -> Void
+    var onGripDragChanged: ((CGFloat) -> Void)? = nil
+    var onGripDragEnded: ((CGFloat) -> Void)? = nil
     
     @State private var isAppearing = false
     @State private var isPressed = false
@@ -33,6 +34,16 @@ struct TaskRow: View {
                         .padding(.vertical, 2)
                         .background(priorityColor.opacity(0.12))
                         .cornerRadius(4)
+                    
+                    if let name = projectName {
+                        Text(name)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.purple)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.purple.opacity(0.1))
+                            .cornerRadius(4)
+                    }
                     
                     Text(statusTitle(task.status))
                         .font(.system(size: 10))
@@ -71,29 +82,17 @@ struct TaskRow: View {
                 .help("Click: next status. Double-click: previous status")
             }
             
-            if onMoveUp != nil || onMoveDown != nil {
-                VStack(spacing: 0) {
-                    Button(action: { onMoveUp?() }) {
-                        Image(systemName: "chevron.up")
-                            .font(.system(size: 10, weight: .semibold))
-                            .frame(width: 24, height: 16)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.borderless)
-                    .opacity(onMoveUp != nil ? 1 : 0.3)
-                    .allowsHitTesting(onMoveUp != nil)
-                    Button(action: { onMoveDown?() }) {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 10, weight: .semibold))
-                            .frame(width: 24, height: 16)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.borderless)
-                    .opacity(onMoveDown != nil ? 1 : 0.3)
-                    .allowsHitTesting(onMoveDown != nil)
-                }
-                .help("Move task up/down")
-            }
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.secondary.opacity(0.4))
+                .frame(width: 22, height: 32)
+                .contentShape(Rectangle())
+                .help("Drag to reorder")
+                .gesture(
+                    DragGesture(minimumDistance: 4, coordinateSpace: .global)
+                        .onChanged { v in onGripDragChanged?(v.translation.height) }
+                        .onEnded { v in onGripDragEnded?(v.translation.height) }
+                )
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 14)

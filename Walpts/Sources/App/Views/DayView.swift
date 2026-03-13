@@ -1,9 +1,11 @@
 import SwiftUI
 import AppKit
+
 struct DayView: View {
     @EnvironmentObject var viewModel: TaskViewModel
     @State private var showingCreateTask = false
     @State private var selectedTask: TaskItem?
+    @State private var draggingTask: TaskItem?
     
     @State private var dragOffset: CGFloat = 0
     @State private var contentOpacity: Double = 1.0
@@ -74,99 +76,82 @@ struct DayView: View {
             }
             .padding(.top, 4)
             
-            List {
-                let allTasks = viewModel.tasksForDate(viewModel.selectedDate)
-                let dayTasks = allTasks.filter { $0.status != .discussion }
-                let discussion = viewModel.discussionTasks()
-                
-                if dayTasks.isEmpty && discussion.isEmpty {
-                    Section {
+            ScrollView {
+                VStack(spacing: 8) {
+                    let allTasks = viewModel.tasksForDate(viewModel.selectedDate)
+                    let dayTasks = allTasks.filter { $0.status != .discussion }
+                    let discussion = viewModel.discussionTasks()
+
+                    if dayTasks.isEmpty && discussion.isEmpty {
                         Text("No tasks")
                             .font(.system(size: 14))
                             .foregroundColor(.secondary)
                             .frame(maxWidth: .infinity)
-                            .listRowBackground(Color.clear)
-                    }
-                } else {
-                    if !dayTasks.isEmpty {
-                        Section {
-                            ForEach(Array(dayTasks.enumerated()), id: \.element.id) { index, task in
-                                TaskRow(
-                                    task: task,
-                                    onNextStatus: {
-                                        withAnimation {
-                                            viewModel.updateStatus(for: task)
+                            .padding(.vertical, 20)
+                    } else {
+                        ForEach(Array(dayTasks.enumerated()), id: \.element.id) { index, task in
+                            let isDragging = draggingTask?.id == task.id
+                            TaskRow(
+                                task: task,
+                                onNextStatus: { withAnimation { viewModel.updateStatus(for: task) } },
+                                onRevertStatus: { withAnimation { viewModel.revertStatus(for: task) } },
+                                projectName: viewModel.epics.first(where: { $0.id == task.epicId })?.name,
+                                onTap: { selectedTask = task },
+                                onGripDragChanged: { delta in
+                                    if draggingTask == nil {
+                                        withAnimation(.spring(response: 0.2, dampingFraction: 0.9)) {
+                                            draggingTask = task
                                         }
-                                    },
-                                    onRevertStatus: {
-                                        withAnimation {
-                                            viewModel.revertStatus(for: task)
-                                        }
-                                    },
-                                    onMoveUp: index > 0 ? {
-                                        withAnimation {
-                                            viewModel.moveTaskDayUp(task, date: viewModel.selectedDate)
-                                        }
-                                    } : nil,
-                                    onMoveDown: index < dayTasks.count - 1 ? {
-                                        withAnimation {
-                                            viewModel.moveTaskDayDown(task, date: viewModel.selectedDate)
-                                        }
-                                    } : nil,
-                                    onTap: {
-                                        selectedTask = task
                                     }
-                                )
-                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                                .listRowBackground(Color(nsColor: .textBackgroundColor))
-                                .listRowSeparator(.hidden)
-                            }
+                                    dragOffset = delta
+                                },
+                                onGripDragEnded: { delta in
+                                    let slotH: CGFloat = 68
+                                    let fromIdx = dayTasks.firstIndex(where: { $0.id == task.id }) ?? index
+                                    let targetIdx = max(0, min(dayTasks.count - 1, fromIdx + Int(round(delta / slotH))))
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        if targetIdx != fromIdx {
+                                            viewModel.moveTaskDay(from: IndexSet(integer: fromIdx), to: targetIdx > fromIdx ? targetIdx + 1 : targetIdx, date: viewModel.selectedDate)
+                                        }
+                                        draggingTask = nil
+                                        dragOffset = 0
+                                    }
+                                }
+                            )
+                            .offset(y: dayTaskVisualOffset(taskId: task.id, index: index, tasks: dayTasks))
+                            .scaleEffect(isDragging ? 1.02 : 1.0)
+                            .shadow(color: isDragging ? .black.opacity(0.22) : .black.opacity(0.06),
+                                    radius: isDragging ? 16 : 6,
+                                    x: 0, y: isDragging ? 8 : 3)
+                            .zIndex(isDragging ? 1 : 0)
+                            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: draggingTask?.id)
                         }
-                    }
-                    
-                    if !discussion.isEmpty {
-                        Section(header: Text("Discussion")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.secondary)) {
+
+                        if !discussion.isEmpty {
+                            HStack {
+                                Text("Discussion")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                            }
+                            .padding(.top, 4)
+
                             ForEach(discussion) { task in
                                 TaskRow(
                                     task: task,
-                                    onNextStatus: {
-                                        withAnimation {
-                                            viewModel.updateStatus(for: task)
-                                        }
-                                    },
-                                    onRevertStatus: {
-                                        withAnimation {
-                                            viewModel.revertStatus(for: task)
-                                        }
-                                    },
-                                    onTap: {
-                                        selectedTask = task
-                                    }
+                                    onNextStatus: { withAnimation { viewModel.updateStatus(for: task) } },
+                                    onRevertStatus: { withAnimation { viewModel.revertStatus(for: task) } },
+                                    onTap: { selectedTask = task }
                                 )
-                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                                .listRowBackground(Color(nsColor: .textBackgroundColor))
-                                .listRowSeparator(.hidden)
                             }
                         }
                     }
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
             .opacity(contentOpacity)
             .offset(x: contentOffset)
-            .gesture(
-                DragGesture()
-                    .onEnded { value in
-                        if value.translation.width < -50 {
-                            animateTransition(direction: 1)
-                        } else if value.translation.width > 50 {
-                            animateTransition(direction: -1)
-                        }
-                    }
-            )
         }
         .onSwipe(left: {
             animateTransition(direction: 1)
@@ -208,7 +193,22 @@ struct DayView: View {
             }
         }
     }
-    
+
+    private func dayTaskVisualOffset(taskId: UUID, index: Int, tasks: [TaskItem]) -> CGFloat {
+        let slotH: CGFloat = 68
+        guard let dragging = draggingTask,
+              let fromIdx = tasks.firstIndex(where: { $0.id == dragging.id }) else { return 0 }
+        if taskId == dragging.id { return dragOffset }
+        let rawTarget = CGFloat(fromIdx) + dragOffset / slotH
+        let targetIdx = Int(max(0, min(CGFloat(tasks.count - 1), rawTarget)).rounded())
+        if fromIdx < targetIdx {
+            if index > fromIdx && index <= targetIdx { return -slotH }
+        } else if fromIdx > targetIdx {
+            if index >= targetIdx && index < fromIdx { return slotH }
+        }
+        return 0
+    }
+
     private func changeDate(by days: Int) {
         if let newDate = Calendar.current.date(byAdding: .day, value: days, to: viewModel.selectedDate) {
             viewModel.selectedDate = newDate
@@ -261,7 +261,9 @@ struct InboxView: View {
     @EnvironmentObject var viewModel: TaskViewModel
     @State private var showingCreateTask = false
     @State private var selectedTask: TaskItem?
-    
+    @State private var draggingTask: TaskItem?
+    @State private var dragOffset: CGFloat = 0
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -280,55 +282,59 @@ struct InboxView: View {
             .padding(.horizontal)
             .padding(.vertical, 12)
             .background(Color(nsColor: .controlBackgroundColor))
-            
-            List {
-                let tasks = viewModel.inboxTasks()
-                if tasks.isEmpty {
-                    Section {
+
+            ScrollView {
+                VStack(spacing: 8) {
+                    let tasks = viewModel.inboxTasks()
+                    if tasks.isEmpty {
                         Text("No inbox tasks")
                             .font(.system(size: 14))
                             .foregroundColor(.secondary)
                             .frame(maxWidth: .infinity)
-                            .listRowBackground(Color.clear)
-                    }
-                } else {
-                    Section {
+                            .padding(.vertical, 20)
+                    } else {
                         ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
+                            let isDragging = draggingTask?.id == task.id
                             TaskRow(
                                 task: task,
-                                onNextStatus: {
-                                    withAnimation {
-                                        viewModel.updateStatus(for: task)
+                                onNextStatus: { withAnimation { viewModel.updateStatus(for: task) } },
+                                onRevertStatus: { withAnimation { viewModel.revertStatus(for: task) } },
+                                projectName: viewModel.epics.first(where: { $0.id == task.epicId })?.name,
+                                onTap: { selectedTask = task },
+                                onGripDragChanged: { delta in
+                                    if draggingTask == nil {
+                                        withAnimation(.spring(response: 0.2, dampingFraction: 0.9)) {
+                                            draggingTask = task
+                                        }
                                     }
+                                    dragOffset = delta
                                 },
-                                onRevertStatus: {
-                                    withAnimation {
-                                        viewModel.revertStatus(for: task)
+                                onGripDragEnded: { delta in
+                                    let slotH: CGFloat = 68
+                                    let fromIdx = tasks.firstIndex(where: { $0.id == task.id }) ?? index
+                                    let targetIdx = max(0, min(tasks.count - 1, fromIdx + Int(round(delta / slotH))))
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        if targetIdx != fromIdx {
+                                            viewModel.moveTaskInbox(from: IndexSet(integer: fromIdx), to: targetIdx > fromIdx ? targetIdx + 1 : targetIdx)
+                                        }
+                                        draggingTask = nil
+                                        dragOffset = 0
                                     }
-                                },
-                                onMoveUp: index > 0 ? {
-                                    withAnimation {
-                                        viewModel.moveTaskInboxUp(task)
-                                    }
-                                } : nil,
-                                onMoveDown: index < tasks.count - 1 ? {
-                                    withAnimation {
-                                        viewModel.moveTaskInboxDown(task)
-                                    }
-                                } : nil,
-                                onTap: {
-                                    selectedTask = task
                                 }
                             )
-                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                            .listRowBackground(Color(nsColor: .textBackgroundColor))
-                            .listRowSeparator(.hidden)
+                            .offset(y: inboxTaskVisualOffset(taskId: task.id, index: index, tasks: tasks))
+                            .scaleEffect(isDragging ? 1.02 : 1.0)
+                            .shadow(color: isDragging ? .black.opacity(0.22) : .black.opacity(0.06),
+                                    radius: isDragging ? 16 : 6,
+                                    x: 0, y: isDragging ? 8 : 3)
+                            .zIndex(isDragging ? 1 : 0)
+                            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: draggingTask?.id)
                         }
                     }
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
         }
         .background(Color(nsColor: .textBackgroundColor))
         .cornerRadius(12)
@@ -359,6 +365,21 @@ struct InboxView: View {
                 Text("Task not found")
             }
         }
+    }
+
+    private func inboxTaskVisualOffset(taskId: UUID, index: Int, tasks: [TaskItem]) -> CGFloat {
+        let slotH: CGFloat = 68
+        guard let dragging = draggingTask,
+              let fromIdx = tasks.firstIndex(where: { $0.id == dragging.id }) else { return 0 }
+        if taskId == dragging.id { return dragOffset }
+        let rawTarget = CGFloat(fromIdx) + dragOffset / slotH
+        let targetIdx = Int(max(0, min(CGFloat(tasks.count - 1), rawTarget)).rounded())
+        if fromIdx < targetIdx {
+            if index > fromIdx && index <= targetIdx { return -slotH }
+        } else if fromIdx > targetIdx {
+            if index >= targetIdx && index < fromIdx { return slotH }
+        }
+        return 0
     }
 }
 
