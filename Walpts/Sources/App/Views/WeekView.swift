@@ -1,11 +1,29 @@
 import SwiftUI
+import EventKit
 
 struct WeekView: View {
     @EnvironmentObject var viewModel: TaskViewModel
+    @EnvironmentObject var calendarManager: CalendarManager
     @State private var anchorDate = Date()
+    @State private var showingCalendar = false
     
     var body: some View {
         VStack(spacing: 0) {
+            // Top Toggle
+            HStack {
+                Spacer()
+                Button(action: {
+                    withAnimation { showingCalendar.toggle() }
+                }) {
+                    Label(showingCalendar ? "Show Tasks" : "Show Calendar", systemImage: showingCalendar ? "checklist" : "calendar.badge.clock")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.borderless)
+                .padding(.trailing, 16)
+                .padding(.vertical, 8)
+            }
+            .background(Color(nsColor: .controlBackgroundColor))
+            
             // Weekday Headers
             HStack(spacing: 1) {
                 ForEach(0..<7) { index in
@@ -22,7 +40,7 @@ struct WeekView: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                         ForEach(-24...24, id: \.self) { offset in
-                            WeekMonthSection(monthOffset: offset, anchorDate: anchorDate, viewModel: viewModel)
+                            WeekMonthSection(monthOffset: offset, anchorDate: anchorDate, viewModel: viewModel, showingCalendar: showingCalendar)
                                 .id(offset)
                         }
                     }
@@ -69,6 +87,7 @@ struct WeekMonthSection: View {
     let monthOffset: Int
     let anchorDate: Date
     @ObservedObject var viewModel: TaskViewModel
+    var showingCalendar: Bool
     
     private var currentMonth: Date {
         Calendar.current.date(byAdding: .month, value: monthOffset, to: anchorDate) ?? anchorDate
@@ -83,7 +102,7 @@ struct WeekMonthSection: View {
             Section(header: WeekMonthHeader(title: monthString)) {
                 VStack(spacing: 1) {
                     ForEach(weeks, id: \.self) { weekStart in
-                        WeekRow(weekStart: weekStart, viewModel: viewModel)
+                        WeekRow(weekStart: weekStart, viewModel: viewModel, showingCalendar: showingCalendar)
                     }
                 }
                 .padding(.bottom, 24)
@@ -150,12 +169,13 @@ struct WeekMonthHeader: View {
 struct WeekRow: View {
     let weekStart: Date
     @ObservedObject var viewModel: TaskViewModel
+    var showingCalendar: Bool
     
     var body: some View {
         HStack(spacing: 1) {
             ForEach(0..<7) { dayOffset in
                 if let date = Calendar.current.date(byAdding: .day, value: dayOffset, to: weekStart) {
-                    WeekDayCell(date: date, viewModel: viewModel)
+                    WeekDayCell(date: date, viewModel: viewModel, showingCalendar: showingCalendar)
                         .onTapGesture {
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                                 viewModel.selectedDate = date
@@ -172,6 +192,8 @@ struct WeekRow: View {
 struct WeekDayCell: View {
     let date: Date
     @ObservedObject var viewModel: TaskViewModel
+    var showingCalendar: Bool
+    @EnvironmentObject var calendarManager: CalendarManager
     
     var body: some View {
         VStack(spacing: 8) {
@@ -188,30 +210,55 @@ struct WeekDayCell: View {
                         .fill(Calendar.current.isDateInToday(date) ? Color.blue.opacity(0.08) : Color.clear)
                 )
             
-            // Task list preview
+            // Task or Event list preview
             VStack(alignment: .leading, spacing: 4) {
-                let tasks = viewModel.tasksForDate(date).filter { $0.status != .discussion }
-                ForEach(tasks.prefix(5)) { task in
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(colorForTask(task))
-                            .frame(width: 4, height: 4)
-                        Text(task.title)
-                            .font(.system(size: 10))
-                            .lineLimit(1)
-                            .strikethrough(task.status == .reported)
-                            .foregroundColor(.primary.opacity(0.7))
-                    }
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
+                if showingCalendar {
+                    let events = calendarManager.fetchEvents(for: date)
+                    ForEach(events.prefix(5), id: \.eventIdentifier) { event in
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(Color(nsColor: event.calendar.color))
+                                .frame(width: 4, height: 4)
+                            Text(event.title)
+                                .font(.system(size: 10))
+                                .lineLimit(1)
+                                .foregroundColor(.primary.opacity(0.7))
+                        }
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
                         .background(.ultraThinMaterial)
-                    .cornerRadius(2)
-                }
-                if tasks.count > 5 {
-                    Text("+ \(tasks.count - 5) more")
-                        .font(.system(size: 9))
-                        .foregroundColor(.secondary)
-                        .padding(.leading, 8)
+                        .cornerRadius(2)
+                    }
+                    if events.count > 5 {
+                        Text("+ \(events.count - 5) more")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary)
+                            .padding(.leading, 8)
+                    }
+                } else {
+                    let tasks = viewModel.tasksForDate(date).filter { $0.status != .discussion }
+                    ForEach(tasks.prefix(5)) { task in
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(colorForTask(task))
+                                .frame(width: 4, height: 4)
+                            Text(task.title)
+                                .font(.system(size: 10))
+                                .lineLimit(1)
+                                .strikethrough(task.status == .reported)
+                                .foregroundColor(.primary.opacity(0.7))
+                        }
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(2)
+                    }
+                    if tasks.count > 5 {
+                        Text("+ \(tasks.count - 5) more")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary)
+                            .padding(.leading, 8)
+                    }
                 }
             }
             Spacer()

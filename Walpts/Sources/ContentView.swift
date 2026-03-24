@@ -2,13 +2,16 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var viewModel: TaskViewModel
+    @EnvironmentObject var calendarManager: CalendarManager
     @AppStorage("isDarkMode") private var isDarkMode = false
+    @AppStorage("calendarNotificationsEnabled") private var calendarNotificationsEnabled = false
     
     enum ViewType: Hashable {
         case day, week, inbox
         case completed
         case project(UUID)
         case notesDay, notesWeek
+        case settings
     }
     
     @State private var contentOpacity: Double = 1.0
@@ -67,10 +70,9 @@ struct ContentView: View {
                     }
 
                     Section("Settings") {
-                        Toggle(isOn: $isDarkMode) {
-                            Label("Dark Mode", systemImage: isDarkMode ? "moon.fill" : "sun.max.fill")
-                        }
-                        .toggleStyle(.switch)
+                        Label("Preferences", systemImage: "gear")
+                            .tag(ViewType.settings)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
                 .scrollContentBackground(.hidden)
@@ -95,6 +97,8 @@ struct ContentView: View {
                         NotesDayView()
                     case .notesWeek:
                         NotesWeekView()
+                    case .settings:
+                        SettingsView()
                     }
                 }
                 .opacity(contentOpacity)

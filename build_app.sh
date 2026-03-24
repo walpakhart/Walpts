@@ -33,6 +33,10 @@ cat > "$APP_DIR/Contents/Info.plist" <<EOF
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Walpts needs access to your calendar to display events alongside your tasks.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Walpts needs access to your calendar to display events alongside your tasks.</string>
 </dict>
 </plist>
 EOF

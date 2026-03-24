@@ -1,11 +1,14 @@
 import SwiftUI
 import AppKit
+import EventKit
 
 struct DayView: View {
     @EnvironmentObject var viewModel: TaskViewModel
+    @EnvironmentObject var calendarManager: CalendarManager
     @State private var showingCreateTask = false
     @State private var selectedTask: TaskItem?
     @State private var draggingTask: TaskItem?
+    @State private var showingCalendar = false
     
     @State private var dragOffset: CGFloat = 0
     @State private var contentOpacity: Double = 1.0
@@ -66,6 +69,15 @@ struct DayView: View {
             HStack(alignment: .center, spacing: 8) {
                 Spacer()
                 Button(action: {
+                    withAnimation { showingCalendar.toggle() }
+                }) {
+                    Label(showingCalendar ? "Show Tasks" : "Show Calendar", systemImage: showingCalendar ? "checklist" : "calendar.badge.clock")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.borderless)
+                .padding(.trailing, 8)
+                
+                Button(action: {
                     withAnimation { viewModel.sortTasksByStatusForDate(viewModel.selectedDate) }
                 }) {
                     Label("Sort by status", systemImage: "arrow.up.arrow.down.circle")
@@ -78,7 +90,21 @@ struct DayView: View {
             
             ScrollView {
                 VStack(spacing: 8) {
-                    let allTasks = viewModel.tasksForDate(viewModel.selectedDate)
+                    if showingCalendar {
+                        let events = calendarManager.fetchEvents(for: viewModel.selectedDate)
+                        if events.isEmpty {
+                            Text("No events for this day")
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 20)
+                        } else {
+                            ForEach(events, id: \.eventIdentifier) { event in
+                                EventRow(event: event)
+                            }
+                        }
+                    } else {
+                        let allTasks = viewModel.tasksForDate(viewModel.selectedDate)
                     let dayTasks = allTasks.filter { $0.status != .discussion }
                     let discussion = viewModel.discussionTasks()
 
@@ -147,6 +173,7 @@ struct DayView: View {
                             }
                         }
                     }
+                    } // Close showingCalendar else
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
@@ -238,6 +265,41 @@ struct DayView: View {
         formatter.locale = Locale(identifier: "en_US")
         formatter.dateFormat = "d MMMM"
         return formatter.string(from: date)
+    }
+}
+
+struct EventRow: View {
+    let event: EKEvent
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color(nsColor: event.calendar.color))
+                .frame(width: 4, height: 40)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(event.title)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.primary)
+                
+                Text(timeString(from: event.startDate, to: event.endDate, isAllDay: event.isAllDay))
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .cornerRadius(8)
+        .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
+    }
+    
+    private func timeString(from start: Date, to end: Date, isAllDay: Bool) -> String {
+        if isAllDay { return "All Day" }
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
     }
 }
 

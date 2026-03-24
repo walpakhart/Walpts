@@ -27,12 +27,14 @@ final class WalptsAppDelegate: NSObject, NSApplicationDelegate {
 struct WalptsApp: App {
     @NSApplicationDelegateAdaptor(WalptsAppDelegate.self) var appDelegate
     @StateObject private var viewModel = TaskViewModel()
+    @StateObject private var calendarManager = CalendarManager()
     @AppStorage("isDarkMode") private var isDarkMode = false
     
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(viewModel)
+                .environmentObject(calendarManager)
                 .frame(minWidth: 800, minHeight: 600)
                 .preferredColorScheme(isDarkMode ? .dark : .light)
         }
