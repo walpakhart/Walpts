@@ -141,6 +141,7 @@ struct DayView: View {
                                     task: task,
                                     onNextStatus: { withAnimation { viewModel.updateStatus(for: task) } },
                                     onRevertStatus: { withAnimation { viewModel.revertStatus(for: task) } },
+                                    projectName: viewModel.epics.first(where: { $0.id == task.epicId })?.name,
                                     onTap: { selectedTask = task }
                                 )
                             }

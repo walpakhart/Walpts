@@ -274,8 +274,10 @@ class TaskViewModel: ObservableObject {
         dayTasks.sort { t1, t2 in
             let c1 = isCompletedOrReported(t1), c2 = isCompletedOrReported(t2)
             if c1 != c2 { return !c1 }
+            let p1 = priorityValue(t1.priority), p2 = priorityValue(t2.priority)
+            if p1 != p2 { return p1 > p2 }
             if statusSeverity(t1.status) != statusSeverity(t2.status) { return statusSeverity(t1.status) < statusSeverity(t2.status) }
-            return priorityValue(t1.priority) > priorityValue(t2.priority)
+            return t1.title < t2.title
         }
         for (i, task) in dayTasks.enumerated() {
             if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
@@ -286,7 +288,12 @@ class TaskViewModel: ObservableObject {
     
     func sortTasksByStatusInbox() {
         var inbox = tasks.filter(\.isInbox)
-        inbox.sort { statusSeverity($0.status) < statusSeverity($1.status) }
+        inbox.sort { t1, t2 in
+            let p1 = priorityValue(t1.priority), p2 = priorityValue(t2.priority)
+            if p1 != p2 { return p1 > p2 }
+            if statusSeverity(t1.status) != statusSeverity(t2.status) { return statusSeverity(t1.status) < statusSeverity(t2.status) }
+            return t1.title < t2.title
+        }
         for (i, task) in inbox.enumerated() {
             if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
                 tasks[idx].orderIndex = i
