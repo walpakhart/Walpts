@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject var viewModel: TaskViewModel
@@ -9,6 +10,7 @@ struct ContentView: View {
     enum ViewType: Hashable {
         case day, week, inbox
         case completed
+        case allTasks
         case project(UUID)
         case notesDay, notesWeek
         case settings
@@ -16,6 +18,10 @@ struct ContentView: View {
     
     @State private var contentOpacity: Double = 1.0
     @State private var contentScale: CGFloat = 1.0
+    @State private var dayDropTargeted = false
+    @State private var inboxDropTargeted = false
+    @State private var allDropTargeted = false
+    @State private var targetedProjectId: UUID?
     
     var body: some View {
         let appBackground = Color(nsColor: .windowBackgroundColor)
@@ -30,22 +36,70 @@ struct ContentView: View {
                         Label("Day", systemImage: "sun.max.fill")
                             .tag(ViewType.day)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.accentColor, lineWidth: dayDropTargeted ? 2 : 0)
+                            )
+                            .onDrop(of: [UTType.plainText], isTargeted: $dayDropTargeted) { providers in
+                                handleTaskDrop(providers) { taskId in
+                                    viewModel.moveTaskToDay(taskId: taskId, date: viewModel.selectedDate)
+                                }
+                            }
                         Label("Week", systemImage: "calendar.badge.clock")
                             .tag(ViewType.week)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         Label("Inbox", systemImage: "tray")
                             .tag(ViewType.inbox)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.accentColor, lineWidth: inboxDropTargeted ? 2 : 0)
+                            )
+                            .onDrop(of: [UTType.plainText], isTargeted: $inboxDropTargeted) { providers in
+                                handleTaskDrop(providers) { taskId in
+                                    viewModel.moveTaskToInbox(taskId: taskId)
+                                }
+                            }
                         Label("Completed", systemImage: "checkmark.circle")
                             .tag(ViewType.completed)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     
                     Section("Projects") {
+                        Label("All", systemImage: "tray.full")
+                            .tag(ViewType.allTasks)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.primary.opacity(0.5), lineWidth: allDropTargeted ? 2 : 0)
+                            )
+                            .onDrop(of: [UTType.plainText], isTargeted: $allDropTargeted) { providers in
+                                handleTaskDrop(providers) { taskId in
+                                    viewModel.assignTaskToProject(taskId: taskId, epicId: nil)
+                                }
+                            }
                         ForEach(viewModel.epics) { epic in
                             Label(epic.name, systemImage: "folder")
                                 .tag(ViewType.project(epic.id))
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(Color.accentColor, lineWidth: targetedProjectId == epic.id ? 2 : 0)
+                                )
+                                .onDrop(of: [UTType.plainText], isTargeted: Binding(
+                                    get: { targetedProjectId == epic.id },
+                                    set: { targeted in
+                                        if targeted {
+                                            targetedProjectId = epic.id
+                                        } else if targetedProjectId == epic.id {
+                                            targetedProjectId = nil
+                                        }
+                                    }
+                                )) { providers in
+                                    handleTaskDrop(providers) { taskId in
+                                        viewModel.assignTaskToProject(taskId: taskId, epicId: epic.id)
+                                    }
+                                }
                         }
                         Button(action: {
                             viewModel.addEpic(name: "New project")
@@ -89,6 +143,8 @@ struct ContentView: View {
                         InboxView()
                     case .completed:
                         CompletedView()
+                    case .allTasks:
+                        AllTasksView()
                     case .project(let id):
                         ProjectView(epicId: id, onDeleteProject: {
                             viewModel.activeTab = .day
@@ -117,5 +173,19 @@ struct ContentView: View {
                 }
             }
         }
+    }
+    
+    private func handleTaskDrop(_ providers: [NSItemProvider], action: @escaping (UUID) -> Void) -> Bool {
+        guard let provider = providers.first else { return false }
+        provider.loadObject(ofClass: NSString.self) { string, _ in
+            if let uuidString = string as? String, let taskId = UUID(uuidString: uuidString) {
+                DispatchQueue.main.async {
+                    withAnimation {
+                        action(taskId)
+                    }
+                }
+            }
+        }
+        return true
     }
 }

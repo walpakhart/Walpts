@@ -12,9 +12,30 @@ struct TaskRow: View {
     @State private var isAppearing = false
     @State private var isPressed = false
     @State private var lastTapTime: Date?
+    @State private var isHoveringDrag = false
     
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: 8) {
+            Image(systemName: "arrow.turn.up.right")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(isHoveringDrag ? .primary : .secondary.opacity(0.35))
+                .frame(width: 20, height: 32)
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(isHoveringDrag ? Color.primary.opacity(0.08) : Color.clear)
+                )
+                .contentShape(Rectangle())
+                .onHover { hovering in
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        isHoveringDrag = hovering
+                    }
+                }
+                .onTapGesture { }
+                .onDrag {
+                    NSItemProvider(object: task.id.uuidString as NSString)
+                }
+                .help("Drag to project or inbox")
+            
             Rectangle()
                 .fill(priorityColor.opacity(0.9))
                 .frame(width: 3)
@@ -82,17 +103,6 @@ struct TaskRow: View {
                 .help("Click: next status. Double-click: previous status")
             }
             
-            Image(systemName: "line.3.horizontal")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.secondary.opacity(0.4))
-                .frame(width: 22, height: 32)
-                .contentShape(Rectangle())
-                .help("Drag to reorder")
-                .gesture(
-                    DragGesture(minimumDistance: 4, coordinateSpace: .global)
-                        .onChanged { v in onGripDragChanged?(v.translation.height) }
-                        .onEnded { v in onGripDragEnded?(v.translation.height) }
-                )
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 14)
@@ -114,6 +124,11 @@ struct TaskRow: View {
             }
             onTap()
         }
+        .gesture(
+            DragGesture(minimumDistance: 6, coordinateSpace: .global)
+                .onChanged { v in onGripDragChanged?(v.translation.height) }
+                .onEnded { v in onGripDragEnded?(v.translation.height) }
+        )
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(Double.random(in: 0...0.1))) {
                 isAppearing = true

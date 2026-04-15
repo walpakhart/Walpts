@@ -150,7 +150,9 @@ struct TaskDetailView: View {
                     Text("Date")
                         .font(.headline)
                         .frame(width: 44, alignment: .leading)
-                    Button(action: { showCalendar = true }) {
+                    Button(action: {
+                        showCalendar.toggle()
+                    }) {
                         HStack(spacing: 6) {
                             Image(systemName: "calendar")
                                 .font(.system(size: 13))
@@ -168,7 +170,7 @@ struct TaskDetailView: View {
                         DatePicker("", selection: $task.date, displayedComponents: .date)
                             .datePickerStyle(.graphical)
                             .labelsHidden()
-                            .frame(width: 280, height: 260)
+                            .hidesFocusRing()
                             .padding(8)
                     }
                 }

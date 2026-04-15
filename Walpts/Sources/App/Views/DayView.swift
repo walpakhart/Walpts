@@ -1,7 +1,6 @@
 import SwiftUI
 import AppKit
 import EventKit
-
 struct DayView: View {
     @EnvironmentObject var viewModel: TaskViewModel
     @EnvironmentObject var calendarManager: CalendarManager
@@ -13,6 +12,7 @@ struct DayView: View {
     @State private var dragOffset: CGFloat = 0
     @State private var contentOpacity: Double = 1.0
     @State private var contentOffset: CGFloat = 0
+    @State private var showingDatePicker = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -47,20 +47,49 @@ struct DayView: View {
                 .buttonStyle(ScaleButtonStyle())
                 
                 Spacer()
-                    .frame(width: 16)
+                    .frame(width: 8)
                 
                 Button(action: {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                         viewModel.selectedDate = Date()
                     }
                 }) {
+                    Text("Today")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Calendar.current.isDateInToday(viewModel.selectedDate) ? .secondary.opacity(0.5) : .primary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color.primary.opacity(Calendar.current.isDateInToday(viewModel.selectedDate) ? 0 : 0.06))
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(Calendar.current.isDateInToday(viewModel.selectedDate))
+                .help("Go to Today")
+                
+                Button(action: {
+                    showingDatePicker.toggle()
+                }) {
                     Image(systemName: "calendar")
                         .font(.system(size: 14))
                         .foregroundColor(.primary)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .buttonStyle(ScaleButtonStyle())
-                .help("Go to Today")
+                .help("Pick a date")
+                .popover(isPresented: $showingDatePicker, arrowEdge: .bottom) {
+                    DatePicker(
+                        "Select date",
+                        selection: $viewModel.selectedDate,
+                        displayedComponents: .date
+                    )
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+                    .hidesFocusRing()
+                    .padding(8)
+                }
             }
             .padding(.horizontal)
             .padding(.vertical, 12)

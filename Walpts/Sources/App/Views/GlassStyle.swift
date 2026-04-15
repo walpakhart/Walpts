@@ -66,6 +66,87 @@ extension View {
     func glass(cornerRadius: CGFloat = 20, opacity: CGFloat = 0.1) -> some View {
         self.modifier(GlassModifier(cornerRadius: cornerRadius, opacity: opacity))
     }
+    
+    func hidesFocusRing() -> some View {
+        self.overlay(FocusRingRemover().allowsHitTesting(false))
+    }
+}
+
+struct FocusRingRemover: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = FocusRingKillerView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            Self.disableFocusRing(in: nsView.window?.contentView)
+        }
+    }
+    
+    static func disableFocusRing(in view: NSView?) {
+        guard let view = view else { return }
+        view.focusRingType = .none
+        if let datePicker = view as? NSDatePicker {
+            datePicker.drawsBackground = false
+            datePicker.isBordered = false
+        }
+        for subview in view.subviews {
+            disableFocusRing(in: subview)
+        }
+    }
+}
+
+private class FocusRingKillerView: NSView {
+    private var observer: NSObjectProtocol?
+    
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        styleWindow()
+        
+        observer = NotificationCenter.default.addObserver(
+            forName: NSView.frameDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.styleWindow()
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.styleWindow()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            self?.styleWindow()
+        }
+    }
+    
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        styleWindow()
+    }
+    
+    private func styleWindow() {
+        FocusRingRemover.disableFocusRing(in: window?.contentView)
+        
+        guard let window = window else { return }
+        window.backgroundColor = .clear
+        window.isOpaque = false
+        window.hasShadow = true
+        if let contentView = window.contentView {
+            contentView.wantsLayer = true
+            contentView.layer?.cornerRadius = 14
+            contentView.layer?.masksToBounds = true
+        }
+    }
+    
+    deinit {
+        if let observer = observer {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
 }
 
 // Компонент фона для всего приложения
