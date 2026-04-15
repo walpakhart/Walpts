@@ -12,6 +12,7 @@ struct TaskDetailView: View {
     @State private var opacity: Double = 0.0
     @State private var draggingSubtask: SubTask?
     @State private var subtaskDragOffset: CGFloat = 0
+    @State private var notesText: String = ""
     
     private var dateFormatter: DateFormatter {
         let f = DateFormatter()
@@ -194,20 +195,16 @@ struct TaskDetailView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Notes / Description")
                     .font(.headline)
-                TextEditor(text: Binding(
-                    get: { task.notes ?? "" },
-                    set: { newValue in
-                        var copy = task
-                        copy.notes = newValue.isEmpty ? nil : newValue
-                        task = copy
-                    }
-                ))
+                TextEditor(text: $notesText)
                 .font(.body)
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: 60, maxHeight: 120)
                 .padding(8)
                 .background(Color(nsColor: .controlBackgroundColor))
                 .cornerRadius(8)
+                .onChange(of: notesText) { newValue in
+                    task.notes = newValue.isEmpty ? nil : newValue
+                }
             }
             
             Divider()
@@ -281,6 +278,7 @@ struct TaskDetailView: View {
         .scaleEffect(scale)
         .opacity(opacity)
         .onAppear {
+            notesText = task.notes ?? ""
             withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                 scale = 1.0
                 opacity = 1.0
