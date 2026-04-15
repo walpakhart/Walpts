@@ -40,15 +40,23 @@ class TaskViewModel: ObservableObject {
         epics = EpicStorage.shared.load()
     }
     
-    func statusSeverity(_ status: TaskStatus) -> Int {
+    func statusGroup(_ status: TaskStatus) -> Int {
         switch status {
-        case .discussion: return 0
-        case .pending: return 1
-        case .approved: return 2
-        case .inProgress: return 3
+        case .inProgress: return 0
+        case .approved: return 1
+        case .pending: return 2
+        case .discussion: return 3
         case .completed: return 4
         case .reported: return 5
         }
+    }
+    
+    func statusSortComparator(_ t1: TaskItem, _ t2: TaskItem) -> Bool {
+        let g1 = statusGroup(t1.status), g2 = statusGroup(t2.status)
+        if g1 != g2 { return g1 < g2 }
+        let p1 = priorityValue(t1.priority), p2 = priorityValue(t2.priority)
+        if p1 != p2 { return p1 > p2 }
+        return t1.title < t2.title
     }
     
     private func isCompletedOrReported(_ task: TaskItem) -> Bool {
@@ -261,16 +269,7 @@ class TaskViewModel: ObservableObject {
     func sortTasksByStatusForDate(_ date: Date) {
         let calendar = Calendar.current
         var dayTasks = tasks.filter { calendar.isDate($0.date, inSameDayAs: date) && !$0.isInbox }
-        dayTasks.sort { t1, t2 in
-            let c1 = isCompletedOrReported(t1), c2 = isCompletedOrReported(t2)
-            if c1 != c2 { return !c1 }
-            let ip1 = t1.status == .inProgress, ip2 = t2.status == .inProgress
-            if ip1 != ip2 { return ip1 }
-            let p1 = priorityValue(t1.priority), p2 = priorityValue(t2.priority)
-            if p1 != p2 { return p1 > p2 }
-            if statusSeverity(t1.status) != statusSeverity(t2.status) { return statusSeverity(t1.status) < statusSeverity(t2.status) }
-            return t1.title < t2.title
-        }
+        dayTasks.sort(by: statusSortComparator)
         for (i, task) in dayTasks.enumerated() {
             if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
                 tasks[idx].orderIndex = i
@@ -280,16 +279,7 @@ class TaskViewModel: ObservableObject {
     
     func sortTasksByStatusInbox() {
         var inbox = tasks.filter(\.isInbox)
-        inbox.sort { t1, t2 in
-            let c1 = isCompletedOrReported(t1), c2 = isCompletedOrReported(t2)
-            if c1 != c2 { return !c1 }
-            let ip1 = t1.status == .inProgress, ip2 = t2.status == .inProgress
-            if ip1 != ip2 { return ip1 }
-            let p1 = priorityValue(t1.priority), p2 = priorityValue(t2.priority)
-            if p1 != p2 { return p1 > p2 }
-            if statusSeverity(t1.status) != statusSeverity(t2.status) { return statusSeverity(t1.status) < statusSeverity(t2.status) }
-            return t1.title < t2.title
-        }
+        inbox.sort(by: statusSortComparator)
         for (i, task) in inbox.enumerated() {
             if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
                 tasks[idx].orderIndex = i
@@ -303,16 +293,7 @@ class TaskViewModel: ObservableObject {
     
     func sortAllTasksByStatus() {
         var sorted = tasks
-        sorted.sort { t1, t2 in
-            let c1 = isCompletedOrReported(t1), c2 = isCompletedOrReported(t2)
-            if c1 != c2 { return !c1 }
-            let ip1 = t1.status == .inProgress, ip2 = t2.status == .inProgress
-            if ip1 != ip2 { return ip1 }
-            let p1 = priorityValue(t1.priority), p2 = priorityValue(t2.priority)
-            if p1 != p2 { return p1 > p2 }
-            if statusSeverity(t1.status) != statusSeverity(t2.status) { return statusSeverity(t1.status) < statusSeverity(t2.status) }
-            return t1.title < t2.title
-        }
+        sorted.sort(by: statusSortComparator)
         for (i, task) in sorted.enumerated() {
             if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
                 tasks[idx].orderIndex = i
@@ -326,16 +307,7 @@ class TaskViewModel: ObservableObject {
     
     func sortTasksByStatusForEpic(_ epicId: UUID) {
         var epicTasks = tasks.filter { $0.epicId == epicId }
-        epicTasks.sort { t1, t2 in
-            let c1 = isCompletedOrReported(t1), c2 = isCompletedOrReported(t2)
-            if c1 != c2 { return !c1 }
-            let ip1 = t1.status == .inProgress, ip2 = t2.status == .inProgress
-            if ip1 != ip2 { return ip1 }
-            let p1 = priorityValue(t1.priority), p2 = priorityValue(t2.priority)
-            if p1 != p2 { return p1 > p2 }
-            if statusSeverity(t1.status) != statusSeverity(t2.status) { return statusSeverity(t1.status) < statusSeverity(t2.status) }
-            return t1.title < t2.title
-        }
+        epicTasks.sort(by: statusSortComparator)
         for (i, task) in epicTasks.enumerated() {
             if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
                 tasks[idx].orderIndex = i
