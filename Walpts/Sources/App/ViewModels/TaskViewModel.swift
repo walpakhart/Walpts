@@ -459,8 +459,14 @@ class TaskViewModel: ObservableObject {
         let calendar = Calendar.current
         let day = calendar.startOfDay(for: date)
         if let index = notes.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: day) }) {
-            notes[index].text = text
+            guard notes[index].text != text else { return }
+            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                notes.remove(at: index)
+            } else {
+                notes[index].text = text
+            }
         } else {
+            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
             let newNote = NoteItem(date: day, text: text)
             notes.append(newNote)
         }

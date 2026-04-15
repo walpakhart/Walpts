@@ -27,14 +27,19 @@ struct DayView: View {
                 .buttonStyle(.plain)
                 .buttonStyle(ScaleButtonStyle())
                 
-                Spacer()
-                
-                Text(formattedDate(viewModel.selectedDate))
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.primary)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedDate)
-                
-                Spacer()
+                Button(action: {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                        viewModel.selectedDate = Date()
+                    }
+                }) {
+                    Text(formattedDate(viewModel.selectedDate))
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.primary)
+                }
+                .buttonStyle(.plain)
+                .disabled(Calendar.current.isDateInToday(viewModel.selectedDate))
+                .help("Go to Today")
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedDate)
                 
                 Button(action: { animateTransition(direction: 1) }) {
                     Image(systemName: "chevron.right")
@@ -47,26 +52,6 @@ struct DayView: View {
                 .buttonStyle(ScaleButtonStyle())
                 
                 Spacer()
-                    .frame(width: 8)
-                
-                Button(action: {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                        viewModel.selectedDate = Date()
-                    }
-                }) {
-                    Text("Today")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Calendar.current.isDateInToday(viewModel.selectedDate) ? .secondary.opacity(0.5) : .primary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(Color.primary.opacity(Calendar.current.isDateInToday(viewModel.selectedDate) ? 0 : 0.06))
-                        )
-                }
-                .buttonStyle(.plain)
-                .disabled(Calendar.current.isDateInToday(viewModel.selectedDate))
-                .help("Go to Today")
                 
                 Button(action: {
                     showingDatePicker.toggle()
@@ -486,6 +471,7 @@ struct NotesDayView: View {
     @State private var editorActionWrapper: ActionWrapper?
     @State private var contentOpacity: Double = 0.0
     @State private var contentOffsetX: CGFloat = 0
+    @State private var showingDatePicker = false
     
     @AppStorage("editorFontName") private var fontName: String = "System"
     @AppStorage("editorFontSize") private var fontSize: Double = 14.0
@@ -512,14 +498,20 @@ struct NotesDayView: View {
                 }
                 .buttonStyle(.plain)
                 
-                Spacer()
-                
-                Text(formattedDate(viewModel.selectedDate))
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.primary)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedDate)
-                
-                Spacer()
+                Button(action: {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                        viewModel.selectedDate = Date()
+                    }
+                    noteText = viewModel.noteText(for: Date())
+                }) {
+                    Text(formattedDate(viewModel.selectedDate))
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(Calendar.current.isDateInToday(viewModel.selectedDate) ? .primary : .primary)
+                }
+                .buttonStyle(.plain)
+                .disabled(Calendar.current.isDateInToday(viewModel.selectedDate))
+                .help("Go to Today")
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedDate)
                 
                 Button(action: { animateTransition(direction: 1) }) {
                     Image(systemName: "chevron.right")
@@ -531,19 +523,35 @@ struct NotesDayView: View {
                 .buttonStyle(.plain)
                 
                 Spacer()
-                    .frame(width: 16)
                 
                 Button(action: {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                        viewModel.selectedDate = Date()
-                    }
+                    showingDatePicker.toggle()
                 }) {
                     Image(systemName: "calendar")
                         .font(.system(size: 14))
                         .foregroundColor(.primary)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Go to Today")
+                .help("Pick a date")
+                .popover(isPresented: $showingDatePicker, arrowEdge: .bottom) {
+                    DatePicker(
+                        "Select date",
+                        selection: Binding(
+                            get: { viewModel.selectedDate },
+                            set: { newDate in
+                                viewModel.selectedDate = newDate
+                                noteText = viewModel.noteText(for: newDate)
+                            }
+                        ),
+                        displayedComponents: .date
+                    )
+                    .datePickerStyle(.graphical)
+                    .labelsHidden()
+                    .hidesFocusRing()
+                    .padding(8)
+                }
             }
             .padding(.horizontal)
             .padding(.vertical, 12)
@@ -873,13 +881,14 @@ struct NotesWeekDayCell: View {
                 )
             
             VStack(alignment: .leading, spacing: 4) {
-                let text = viewModel.noteText(for: date)
-                if text.isEmpty {
+                let raw = viewModel.noteText(for: date)
+                let preview = Self.plainTextPreview(from: raw)
+                if preview.isEmpty {
                     Text("No note")
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                 } else {
-                    Text(text)
+                    Text(preview)
                         .font(.system(size: 10))
                         .foregroundColor(.primary.opacity(0.7))
                         .lineLimit(3)
@@ -908,6 +917,18 @@ struct NotesWeekDayCell: View {
         formatter.dateFormat = "d"
         return formatter
     }()
+    
+    static func plainTextPreview(from stored: String) -> String {
+        if stored.hasPrefix(NotesRichTextEditor.rtfPrefix) {
+            let base64 = String(stored.dropFirst(NotesRichTextEditor.rtfPrefix.count))
+            if let data = Data(base64Encoded: base64),
+               let attributed = NSAttributedString(rtf: data, documentAttributes: nil) {
+                return attributed.string.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            return ""
+        }
+        return stored.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }
 
 
@@ -934,14 +955,9 @@ struct NotesRichTextEditor: NSViewRepresentable {
         
         context.coordinator.textView = textView
         
-        // Setup initial content from markdown
-        if let attributed = try? NSAttributedString(markdown: text) {
-            let styled = applyCustomAttributes(to: attributed)
-            textView.textStorage?.setAttributedString(styled)
-        } else {
-            textView.string = text
-            textView.textColor = .textColor
-        }
+        let attributed = Self.deserialize(text, fontSize: fontSize, fontName: fontName, getFont: getFont)
+        textView.textStorage?.setAttributedString(attributed)
+        context.coordinator.lastSerializedText = text
         
         // Ensure typing attributes also have the correct color initially
         var attributes = textView.typingAttributes
@@ -963,9 +979,9 @@ struct NotesRichTextEditor: NSViewRepresentable {
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? NSTextView else { return }
         
-        // Check for font/size changes
         if context.coordinator.lastFontName != fontName || context.coordinator.lastFontSize != fontSize {
-            // Update typing attributes
+            textView.delegate = nil
+            
             var attributes = textView.typingAttributes
             if let currentFont = attributes[.font] as? NSFont {
                  let traits = NSFontManager.shared.traits(of: currentFont)
@@ -977,24 +993,16 @@ struct NotesRichTextEditor: NSViewRepresentable {
             }
             textView.typingAttributes = attributes
             
-            // Update existing text
             if let storage = textView.textStorage {
+                 let selectedRange = textView.selectedRange()
                  let styled = applyCustomAttributes(to: storage)
-                 if storage.string != styled.string {
-                      // Text content didn't change, just attributes
-                      storage.setAttributedString(styled)
-                 } else {
-                      // Apply attributes manually to preserve selection and avoid glitches
-                      // But setAttributedString is safer for full re-styling.
-                      // We need to preserve selection
-                      let selectedRange = textView.selectedRange()
-                      storage.setAttributedString(styled)
-                      textView.setSelectedRange(selectedRange)
-                 }
+                 storage.setAttributedString(styled)
+                 textView.setSelectedRange(selectedRange)
             }
             
             context.coordinator.lastFontName = fontName
             context.coordinator.lastFontSize = fontSize
+            textView.delegate = context.coordinator
         }
         
         // Handle actions
@@ -1020,30 +1028,60 @@ struct NotesRichTextEditor: NSViewRepresentable {
             }
         }
         
-        // Handle external text updates (e.g. date change)
-        if context.coordinator.lastMarkdown != text {
-            if let attributed = try? NSAttributedString(markdown: text) {
-                // Apply custom styling (font size 14, correct color) to the parsed markdown
-                let styled = applyCustomAttributes(to: attributed)
-                
-                if textView.textStorage?.string != styled.string {
-                    // Capture selection
-                    let selectedRange = textView.selectedRange()
-                    
-                    textView.textStorage?.setAttributedString(styled)
-                    
-                    // Restore selection (clamped)
-                    let newLength = textView.string.count
-                    let location = min(selectedRange.location, newLength)
-                    let length = min(selectedRange.length, newLength - location)
-                    textView.setSelectedRange(NSRange(location: location, length: length))
-                }
-            }
-            context.coordinator.lastMarkdown = text
+        if context.coordinator.lastSerializedText != text {
+            textView.delegate = nil
+            let attributed = Self.deserialize(text, fontSize: fontSize, fontName: fontName, getFont: getFont)
+            textView.textStorage?.setAttributedString(attributed)
+            context.coordinator.lastSerializedText = text
+            textView.delegate = context.coordinator
         }
     }
     
-    // Make this internal/public so Coordinator can access if needed, or move logic to Coordinator
+    static let rtfPrefix = "rtf:"
+    
+    static func serialize(_ attributedString: NSAttributedString) -> String {
+        let range = NSRange(location: 0, length: attributedString.length)
+        if let rtfData = try? attributedString.data(
+            from: range,
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
+        ) {
+            return rtfPrefix + rtfData.base64EncodedString()
+        }
+        return attributedString.string
+    }
+    
+    static func deserialize(_ text: String, fontSize: Double, fontName: String, getFont: (CGFloat, Bool, Bool) -> NSFont) -> NSAttributedString {
+        if text.hasPrefix(rtfPrefix) {
+            let base64 = String(text.dropFirst(rtfPrefix.count))
+            if let data = Data(base64Encoded: base64),
+               let attributed = NSAttributedString(rtf: data, documentAttributes: nil) {
+                let mutable = NSMutableAttributedString(attributedString: attributed)
+                let fullRange = NSRange(location: 0, length: mutable.length)
+                mutable.addAttribute(.foregroundColor, value: NSColor.textColor, range: fullRange)
+                return mutable
+            }
+        }
+        
+        if text.isEmpty {
+            return NSAttributedString(string: "", attributes: [
+                .font: getFont(fontSize, false, false),
+                .foregroundColor: NSColor.textColor
+            ])
+        }
+        
+        if let attributed = try? NSAttributedString(markdown: text) {
+            let mutable = NSMutableAttributedString(attributedString: attributed)
+            let fullRange = NSRange(location: 0, length: mutable.length)
+            mutable.addAttribute(.foregroundColor, value: NSColor.textColor, range: fullRange)
+            return mutable
+        }
+        
+        return NSAttributedString(string: text, attributes: [
+            .font: getFont(fontSize, false, false),
+            .foregroundColor: NSColor.textColor
+        ])
+    }
+    
     func applyCustomAttributes(to attributed: NSAttributedString) -> NSAttributedString {
         let mutable = NSMutableAttributedString(attributedString: attributed)
         let fullRange = NSRange(location: 0, length: mutable.length)
@@ -1310,7 +1348,7 @@ struct NotesRichTextEditor: NSViewRepresentable {
     
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: NotesRichTextEditor
-        var lastMarkdown: String = ""
+        var lastSerializedText: String = ""
         var lastActionWrapper: ActionWrapper?
         var lastFontName: String = ""
         var lastFontSize: Double = 0
@@ -1320,123 +1358,17 @@ struct NotesRichTextEditor: NSViewRepresentable {
             self.parent = parent
         }
         
-        // This ensures helper functions are available
         func applyCustomAttributes(to attributed: NSAttributedString) -> NSAttributedString {
             return parent.applyCustomAttributes(to: attributed)
         }
         
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
+            guard let storage = textView.textStorage else { return }
             
-            if let attributed = textView.textStorage {
-                let markdown = serializeToMarkdown(attributed)
-                parent.text = markdown
-                lastMarkdown = markdown
-            }
-        }
-        
-        private func serializeToMarkdown(_ attributedString: NSAttributedString) -> String {
-            var markdown = ""
-            let string = attributedString.string as NSString
-            let fullRange = NSRange(location: 0, length: string.length)
-            
-            attributedString.enumerateAttribute(.paragraphStyle, in: fullRange, options: []) { styleValue, paragraphRange, _ in
-                var isList = false
-                if let style = styleValue as? NSParagraphStyle, !style.textLists.isEmpty {
-                    isList = true
-                }
-                
-                // If it's a list, we need to handle the list marker.
-                // However, the newline is usually at the end of paragraphRange.
-                // We should process the text content.
-                
-                // Note: paragraphRange includes the trailing newline.
-                
-                let paragraphText = string.substring(with: paragraphRange)
-                let hasNewline = paragraphText.hasSuffix("\n")
-                let contentRange = hasNewline ? NSRange(location: paragraphRange.location, length: paragraphRange.length - 1) : paragraphRange
-                
-                if contentRange.length == 0 {
-                    // Empty line
-                    if hasNewline { markdown += "\n" }
-                    return
-                }
-                
-                // Check if it's a header based on font size of the first character
-                var headerLevel = 0
-                if contentRange.length > 0 {
-                    let firstCharAttributes = attributedString.attributes(at: contentRange.location, effectiveRange: nil)
-                    if let font = firstCharAttributes[.font] as? NSFont {
-                        if font.pointSize >= 24 { headerLevel = 1 }
-                        else if font.pointSize >= 20 { headerLevel = 2 }
-                        else if font.pointSize >= 16 { headerLevel = 3 }
-                    }
-                }
-                
-                if headerLevel > 0 {
-                    markdown += String(repeating: "#", count: headerLevel) + " "
-                } else if isList {
-                    markdown += "* "
-                }
-                
-                var currentBold = false
-                var currentItalic = false
-                var currentStrikethrough = false
-                var currentUnderline = false
-                var currentLink: URL? = nil
-                
-                attributedString.enumerateAttributes(in: contentRange, options: []) { attributes, subRange, _ in
-                    let font = attributes[.font] as? NSFont
-                    // Check font traits more robustly using NSFontManager
-                    let traits = font != nil ? NSFontManager.shared.traits(of: font!) : []
-                    
-                    // If header, ignore bold trait as it is implicit in Markdown headers
-                    let isBold = (headerLevel > 0) ? false : traits.contains(.boldFontMask)
-                    let isItalic = traits.contains(.italicFontMask)
-                    
-                    let link = attributes[.link] as? URL
-                    let strikethroughStyle = (attributes[.strikethroughStyle] as? Int) ?? 0
-                    let isStrikethrough = strikethroughStyle != 0
-                    let underlineStyle = (attributes[.underlineStyle] as? Int) ?? 0
-                    let isUnderline = underlineStyle != 0
-                    
-                    // Close tags (reverse order of opening)
-                    if currentLink != nil && currentLink != link {
-                        markdown += "](\(currentLink!.absoluteString))"
-                        currentLink = nil
-                    }
-                    if currentUnderline && !isUnderline { markdown += "</u>"; currentUnderline = false }
-                    if currentStrikethrough && !isStrikethrough { markdown += "~~"; currentStrikethrough = false }
-                    if currentItalic && !isItalic { markdown += "*"; currentItalic = false }
-                    if currentBold && !isBold { markdown += "**"; currentBold = false }
-                    
-                    // Open tags
-                    if !currentBold && isBold { markdown += "**"; currentBold = true }
-                    if !currentItalic && isItalic { markdown += "*"; currentItalic = true }
-                    if !currentStrikethrough && isStrikethrough { markdown += "~~"; currentStrikethrough = true }
-                    if !currentUnderline && isUnderline { markdown += "<u>"; currentUnderline = true }
-                    if currentLink == nil && link != nil {
-                        markdown += "["
-                        currentLink = link
-                    }
-                    
-                    let text = string.substring(with: subRange).replacingOccurrences(of: "\u{200B}", with: "")
-                    markdown += text
-                }
-                
-                // Close remaining tags
-                if currentLink != nil { markdown += "](\(currentLink!.absoluteString))" }
-                if currentUnderline { markdown += "</u>" }
-                if currentStrikethrough { markdown += "~~" }
-                if currentItalic { markdown += "*" }
-                if currentBold { markdown += "**" }
-                
-                if hasNewline {
-                    markdown += "\n"
-                }
-            }
-            
-            return markdown
+            let serialized = NotesRichTextEditor.serialize(storage)
+            parent.text = serialized
+            lastSerializedText = serialized
         }
     }
 }
