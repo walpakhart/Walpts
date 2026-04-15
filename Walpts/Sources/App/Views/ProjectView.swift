@@ -7,13 +7,16 @@ struct ProjectView: View {
     @State private var selectedTask: TaskItem?
     @State private var isEditingName = false
     @State private var editedName = ""
+    @State private var showDoneTasks = false
     
     private var epic: Epic? {
         viewModel.epics.first { $0.id == epicId }
     }
     
     private var projectTasks: [TaskItem] {
-        viewModel.tasksForEpic(epicId)
+        let all = viewModel.tasksForEpic(epicId)
+        if showDoneTasks { return all }
+        return all.filter { $0.status != .completed && $0.status != .reported }
     }
     
     var body: some View {
@@ -59,6 +62,14 @@ struct ProjectView: View {
                     withAnimation { viewModel.sortTasksByStatusForEpic(epicId) }
                 }) {
                     Label("Sort by status", systemImage: "arrow.up.arrow.down.circle")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.borderless)
+                Button(action: {
+                    withAnimation { showDoneTasks.toggle() }
+                }) {
+                    Label(showDoneTasks ? "Hide done" : "Show done",
+                          systemImage: showDoneTasks ? "eye.slash" : "eye")
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.borderless)
