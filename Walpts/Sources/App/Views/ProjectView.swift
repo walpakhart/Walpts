@@ -55,6 +55,13 @@ struct ProjectView: View {
                         .foregroundColor(.primary)
                 }
                 Spacer()
+                Button(action: {
+                    withAnimation { viewModel.sortTasksByStatusForEpic(epicId) }
+                }) {
+                    Label("Sort by status", systemImage: "arrow.up.arrow.down.circle")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.borderless)
                 if onDeleteProject != nil, epic != nil {
                     Button(role: .destructive, action: {
                         if let e = epic {
